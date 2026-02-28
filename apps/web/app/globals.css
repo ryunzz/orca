@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #070b14;
+  --card: #121a2a;
+  --text: #eaf2ff;
+  --muted: #9db1c5;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #0a1830, #05080f 45%, #03060d);
+  color: var(--text);
+  font-family: "Inter", "Segoe UI", sans-serif;
+}
+
+a {
+  color: #a5f3fc;
+}
