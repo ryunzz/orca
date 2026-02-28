@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StructuralAnalysisResult",
+  "description": "Output schema for Structural Analysis Team. Reads fire severity data from Redis.",
+  "type": "object",
+  "required": ["overall_integrity", "zones", "timestamp"],
+  "properties": {
+    "overall_integrity": {
+      "type": "string",
+      "enum": ["intact", "compromised", "unstable", "imminent_collapse"],
+      "description": "Overall structural integrity assessment"
+    },
+    "integrity_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Normalized integrity score (1 = fully intact, 0 = collapsed)"
+    },
+    "zones": {
+      "type": "array",
+      "description": "Per-zone structural assessments",
+      "items": {
+        "type": "object",
+        "required": ["zone_id", "integrity_status", "safe_to_enter"],
+        "properties": {
+          "zone_id": {
+            "type": "string",
+            "description": "Zone/room identifier"
+          },
+          "integrity_status": {
+            "type": "string",
+            "enum": ["intact", "minor_damage", "major_damage", "critical", "collapsed"]
+          },
+          "integrity_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "safe_to_enter": {
+            "type": "boolean",
+            "description": "Whether firefighters can safely enter this zone"
+          },
+          "fire_exposure_level": {
+            "type": "string",
+            "enum": ["none", "low", "moderate", "high", "direct"],
+            "description": "Level of fire exposure affecting structure (from fire team data)"
+          },
+          "damage_type": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["thermal", "smoke", "water", "impact", "load_bearing_compromise"]
+            }
+          },
+          "hazards": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Specific hazards in this zone (e.g., 'ceiling collapse risk', 'floor weakened')"
+          }
+        }
+      }
+    },
+    "blocked_passages": {
+      "type": "array",
+      "description": "Passages that are blocked or unsafe",
+      "items": {
+        "type": "object",
+        "required": ["passage_id", "from_zone", "to_zone", "blocked_reason"],
+        "properties": {
+          "passage_id": { "type": "string" },
+          "from_zone": { "type": "string" },
+          "to_zone": { "type": "string" },
+          "blocked_reason": {
+            "type": "string",
+            "enum": ["debris", "fire", "smoke", "structural_failure", "locked", "unknown"]
+          },
+          "clearable": {
+            "type": "boolean",
+            "description": "Whether the blockage can be cleared by firefighters"
+          },
+          "clearing_difficulty": {
+            "type": "string",
+            "enum": ["easy", "moderate", "difficult", "impossible"]
+          }
+        }
+      }
+    },
+    "load_bearing_status": {
+      "type": "object",
+      "description": "Status of load-bearing elements",
+      "properties": {
+        "walls_compromised": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of compromised load-bearing walls"
+        },
+        "columns_compromised": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "floor_integrity": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["safe", "caution", "unsafe"]
+          },
+          "description": "Floor safety by level (e.g., 'floor_1': 'safe')"
+        },
+        "roof_status": {
+          "type": "string",
+          "enum": ["intact", "compromised", "partial_collapse", "collapsed"]
+        }
+      }
+    },
+    "degradation_timeline": {
+      "type": "object",
+      "description": "Predicted structural degradation over time",
+      "properties": {
+        "current_risk": {
+          "type": "string",
+          "enum": ["low", "moderate", "high", "critical"]
+        },
+        "time_to_critical": {
+          "type": "integer",
+          "description": "Estimated minutes until structure becomes critical (null if stable)"
+        },
+        "collapse_zones": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Zones at highest risk of collapse"
+        },
+        "recommended_evacuation_deadline": {
+          "type": "integer",
+          "description": "Minutes until all personnel should evacuate"
+        }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "fire_context_used": {
+      "type": "boolean",
+      "description": "Whether fire severity data was available and incorporated"
+    },
+    "frame_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

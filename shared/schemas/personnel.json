@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PersonnelRecommendationResult",
+  "description": "Output schema for Personnel Recommendation Team. Reads all other team data from Redis.",
+  "type": "object",
+  "required": ["incident_classification", "team_composition", "equipment", "approach_strategy", "timestamp"],
+  "properties": {
+    "incident_classification": {
+      "type": "object",
+      "required": ["type", "alarm_level", "complexity"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["structure_fire", "high_rise_fire", "hazmat", "rescue", "vehicle_fire", "wildland_urban", "multi_alarm"],
+          "description": "Incident type classification"
+        },
+        "alarm_level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Recommended alarm level (1-5)"
+        },
+        "complexity": {
+          "type": "string",
+          "enum": ["routine", "moderate", "complex", "major"],
+          "description": "Incident complexity"
+        },
+        "ics_type": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Incident Command System type (1=most complex, 5=least)"
+        }
+      }
+    },
+    "team_composition": {
+      "type": "object",
+      "required": ["total_personnel", "units"],
+      "properties": {
+        "total_personnel": {
+          "type": "integer",
+          "description": "Total recommended personnel count"
+        },
+        "units": {
+          "type": "array",
+          "description": "Recommended unit breakdown",
+          "items": {
+            "type": "object",
+            "required": ["unit_type", "count", "role"],
+            "properties": {
+              "unit_type": {
+                "type": "string",
+                "enum": ["engine", "ladder", "rescue", "hazmat", "ems", "battalion_chief", "safety_officer", "rit"],
+                "description": "Type of unit"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "role": {
+                "type": "string",
+                "description": "Primary role for this unit (e.g., 'fire_attack', 'ventilation', 'search_rescue')"
+              },
+              "personnel_per_unit": {
+                "type": "integer"
+              },
+              "priority": {
+                "type": "string",
+                "enum": ["immediate", "supporting", "standby"]
+              }
+            }
+          }
+        },
+        "minimum_personnel": {
+          "type": "integer",
+          "description": "Absolute minimum personnel needed"
+        },
+        "recommended_reserve": {
+          "type": "integer",
+          "description": "Recommended reserve/rehab personnel"
+        }
+      }
+    },
+    "equipment": {
+      "type": "object",
+      "required": ["critical", "recommended"],
+      "properties": {
+        "critical": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["item", "quantity", "reason"],
+            "properties": {
+              "item": { "type": "string" },
+              "quantity": { "type": "integer" },
+              "reason": { "type": "string" }
+            }
+          },
+          "description": "Critical equipment that must be on scene"
+        },
+        "recommended": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "item": { "type": "string" },
+              "quantity": { "type": "integer" },
+              "reason": { "type": "string" }
+            }
+          },
+          "description": "Recommended additional equipment"
+        },
+        "special_operations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Special operations equipment (e.g., 'thermal_imaging', 'hazmat_suits')"
+        }
+      }
+    },
+    "approach_strategy": {
+      "type": "object",
+      "required": ["mode", "primary_objective", "tactics"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["offensive", "defensive", "transitional", "marginal"],
+          "description": "Overall firefighting mode"
+        },
+        "primary_objective": {
+          "type": "string",
+          "description": "Primary tactical objective"
+        },
+        "secondary_objectives": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tactics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "priority", "assigned_to"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Tactic name (e.g., 'interior_attack', 'ventilation', 'search_rescue')"
+              },
+              "priority": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "assigned_to": {
+                "type": "string",
+                "description": "Unit type assigned to this tactic"
+              },
+              "location": {
+                "type": "string",
+                "description": "Zone or area for this tactic"
+              },
+              "notes": { "type": "string" }
+            }
+          }
+        },
+        "water_supply": {
+          "type": "object",
+          "properties": {
+            "required_gpm": {
+              "type": "integer",
+              "description": "Required gallons per minute"
+            },
+            "hydrant_locations": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "supply_lines_needed": {
+              "type": "integer"
+            }
+          }
+        },
+        "command_structure": {
+          "type": "object",
+          "properties": {
+            "ic_level": {
+              "type": "string",
+              "enum": ["company_officer", "battalion_chief", "deputy_chief", "chief"]
+            },
+            "divisions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "ICS divisions to establish"
+            },
+            "groups": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "ICS groups to establish"
+            }
+          }
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "properties": {
+        "eta_first_unit_minutes": {
+          "type": "integer",
+          "description": "Estimated time of arrival for first unit"
+        },
+        "eta_full_assignment_minutes": {
+          "type": "integer",
+          "description": "ETA for full assignment on scene"
+        },
+        "estimated_containment_minutes": {
+          "type": "integer",
+          "description": "Estimated time to fire containment"
+        },
+        "estimated_control_minutes": {
+          "type": "integer",
+          "description": "Estimated time to fire under control"
+        },
+        "par_check_interval_minutes": {
+          "type": "integer",
+          "default": 15,
+          "description": "Personnel accountability report interval"
+        }
+      }
+    },
+    "safety_considerations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["concern", "severity", "mitigation"],
+        "properties": {
+          "concern": { "type": "string" },
+          "severity": {
+            "type": "string",
+            "enum": ["low", "moderate", "high", "critical"]
+          },
+          "mitigation": { "type": "string" },
+          "source_team": {
+            "type": "string",
+            "enum": ["fire_severity", "structural", "evacuation"],
+            "description": "Which team identified this concern"
+          }
+        }
+      },
+      "description": "Safety considerations compiled from all team analyses"
+    },
+    "mutual_aid": {
+      "type": "object",
+      "properties": {
+        "requested": { "type": "boolean" },
+        "agencies": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "resources_requested": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "context_sources": {
+      "type": "object",
+      "properties": {
+        "fire_severity_used": { "type": "boolean" },
+        "structural_used": { "type": "boolean" },
+        "evacuation_used": { "type": "boolean" }
+      }
+    },
+    "frame_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
