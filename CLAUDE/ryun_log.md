@@ -189,6 +189,68 @@ modal deploy packages/modal-deploy/src/agent_registry.py
 - Connect frontend to cloud inference
 - Demo optimization
 
+---
+
+### [2026-02-28 03:00] — Swarm Architecture + Network Heat Maps
+
+**What**: Upgraded from single-agent registration to swarm-based architecture. One OpenClaw agent now spawns multiple sub-agents across ALL teams, with network-wide aggregation.
+
+**Pulled from Remote**:
+- `packages/world-models/src/modal_app.py` — Ollama + Llama 3.2 Vision on Modal GPU (T4)
+- `packages/orchestrator/src/modal_deploy.py` — Deploy helper script
+
+**Files Created**:
+- `packages/modal-deploy/src/swarm_registry.py` — NEW: Full swarm orchestration
+  - `POST /spawn-swarm` — One agent spawns 12 sub-agents (3 per team)
+  - `GET /poll-tasks` — Get pending tasks grouped by team
+  - `POST /submit-batch` — Submit results from all sub-agents at once
+  - `GET /get-heat-map` — Network-wide aggregated consensus
+  - `GET /network-status` — Total swarms, agents, tasks
+
+**Files Modified**:
+- `AGENT_CONNECT.md` — Updated with swarm architecture, heat map output format
+
+**Architecture**:
+```
+External Agent (OpenClaw)
+       │
+       ▼ POST /spawn-swarm
+┌──────────────────────────────────────┐
+│           ORCA Network               │
+│  ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐
+│  │ fire  │ │struct │ │ evac  │ │ pers  │
+│  │  x3   │ │  x3   │ │  x3   │ │  x3   │
+│  └───┬───┘ └───┬───┘ └───┬───┘ └───┬───┘
+│      └─────────┴─────────┴─────────┘
+│                    │
+│         Network Aggregation
+│        (consensus + heat map)
+└────────────────────┬─────────────────┘
+                     ▼
+            Normalized Result
+```
+
+**Heat Map Aggregation**:
+- Averages confidence scores across all agents
+- Counts votes for categorical fields (severity_votes)
+- Calculates consensus_confidence (adjusted for variance)
+- Network-wide stats: total agents, avg confidence, teams reporting
+
+**One-liner to spawn swarm**:
+```bash
+curl -X POST https://orca-swarm--spawn-swarm.modal.run \
+  -H "Content-Type: application/json" \
+  -d '{"name":"openclaw-1","instances_per_team":3}'
+```
+
+**Blockers**: None
+
+**Next**:
+- Deploy swarm registry to Modal
+- Test with real OpenClaw agents
+- Add persistence (Redis) for production
+- Visualization of heat maps in frontend
+
 <!--
 Example entry format:
 
