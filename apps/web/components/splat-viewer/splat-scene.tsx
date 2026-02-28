@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
@@ -8,6 +8,7 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { getWorld, selectSpzUrl } from "@/lib/worldlabs";
 import "./spark-extend";
+import { SplatReveal } from "./splat-reveal";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -129,20 +130,51 @@ export function SplatScene({
   const [alternateSpzUrl, setAlternateSpzUrl] = useState<string | null>(null);
   const alternateFetchStateRef = useRef<AlternateFetchState>("idle");
 
+  // Particle reveal state — only used for the primary initial load
+  const [splatReady, setSplatReady] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+
+  // When the GPU warmup delay elapses, surface the load to the parent so the
+  // DOM loading overlay disappears at the same moment the particle fade begins.
+  useEffect(() => {
+    if (splatReady) onLoaded?.();
+  }, [splatReady, onLoaded]);
+
+  const handleRevealComplete = useCallback(() => setRevealed(true), []);
+
   // Handle primary splat initialization
   useEffect(() => {
     if (activeSlot !== "primary") return;
     const splat = primarySplatRef.current;
     if (!splat) return;
 
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
     splat.initialized
-      .then(() => onLoaded?.())
+      .then(() => {
+        if (cancelled) return;
+        // Give SparkRenderer a few frames to upload Gaussian data to the GPU
+        // before the backdrop + particles start fading, so the splat is already
+        // visible underneath when the reveal completes.
+        timer = setTimeout(() => {
+          if (!cancelled) setSplatReady(true);
+        }, 500);
+      })
       .catch((err: unknown) => {
+        if (cancelled) return;
         const error =
           err instanceof Error ? err : new Error("Failed to load splat");
+        setHasError(true);
         onError?.(error);
       });
-  }, [activeSlot, onLoaded, onError]);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeSlot, onError]);
 
   // Handle alternate splat initialization
   useEffect(() => {
@@ -150,12 +182,20 @@ export function SplatScene({
     const splat = alternateSplatRef.current;
     if (!splat) return;
 
+    let cancelled = false;
+
     splat.initialized
-      .then(() => onTransitionEnd?.())
+      .then(() => {
+        if (!cancelled) onTransitionEnd?.();
+      })
       .catch((err: unknown) => {
-        console.error("Failed to load alternate splat:", err);
-        onTransitionEnd?.();
+        if (!cancelled) {
+          console.error("Failed to load alternate splat:", err);
+          onTransitionEnd?.();
+        }
       });
+
+    return () => { cancelled = true; };
   }, [activeSlot, alternateSpzUrl, onTransitionEnd]);
 
   // Tab key handler — toggle which splat is mounted
@@ -224,6 +264,11 @@ export function SplatScene({
           args={[{ url: alternateSpzUrl }]}
           rotation={[Math.PI, 0, 0]}
         />
+      )}
+
+      {/* Particle reveal — only on primary initial load; stops immediately on error */}
+      {!revealed && !hasError && activeSlot === "primary" && (
+        <SplatReveal isLoaded={splatReady} onComplete={handleRevealComplete} />
       )}
 
       <OrbitControls

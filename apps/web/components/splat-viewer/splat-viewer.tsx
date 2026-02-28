@@ -24,7 +24,7 @@ export function SplatViewer({ spzUrl, alternateWorldId }: SplatViewerProps) {
   return (
     <div className="relative h-full w-full">
       <Canvas
-        gl={{ antialias: false }}
+        gl={{ antialias: false, alpha: true }}
         camera={{ position: [0, 0, -2], fov: 60, near: 0.1, far: 100 }}
       >
         <Suspense fallback={null}>
