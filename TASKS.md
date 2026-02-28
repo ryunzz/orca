@@ -52,7 +52,7 @@
   - Replace stock images with actual Siebel Center frames
   - Adjust vision model prompts/parameters if outputs are off
   - Ensure fire detection works on synthetic/generated scenes
-- [ ] **P2-C3** Build evacuation route logic (cross-team orchestration):
+- [x] **P2-C3** Build evacuation route logic (cross-team orchestration):
   - Read fire severity spatial map from Redis (fire team)
   - Read structural integrity data from Redis (structural team)
   - Combine with floor layout extracted from frames
