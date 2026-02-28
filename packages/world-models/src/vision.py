@@ -120,13 +120,25 @@ def _parse_json_response(raw: str) -> dict[str, Any]:
     return json.loads(raw)
 
 
+def _call_vision_modal(image_data: str, media_type: str, prompt: str) -> dict[str, Any]:
+    """Send image + prompt to Modal-hosted Ollama for inference."""
+    import modal
+
+    VisionModel = modal.Cls.from_name("orca-vision", "VisionModel")
+    return VisionModel().analyze.remote(image_data, prompt)
+
+
 def _call_vision(image_data: str, media_type: str, prompt: str) -> dict[str, Any]:
-    """Send image + prompt to the Ollama vision backend."""
+    """Route vision call to the configured backend."""
+    if VISION_BACKEND == "modal":
+        return _call_vision_modal(image_data, media_type, prompt)
     return _call_vision_ollama(image_data, media_type, prompt)
 
 
 def _api_available() -> bool:
-    """Check if Ollama is reachable."""
+    """Check if the vision backend is reachable."""
+    if VISION_BACKEND == "modal":
+        return True  # Modal availability checked at call time; fallback handles errors
     try:
         urlopen(f"{OLLAMA_BASE_URL}/api/tags", timeout=2)
         return True
