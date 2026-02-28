@@ -59,86 +59,63 @@ Respond with ONLY valid JSON (no markdown, no explanation):
   "confidence": 0.0-1.0
 }"""
 
-STRUCTURAL_PROMPT_TEMPLATE = """Analyze this building image for structural integrity during a fire emergency.
-
-Previous fire analysis:
-{fire_context}
-
-Look for:
-- Structural damage to walls, columns, floors, ceiling
-- Blocked passages or debris
-- Collapse risks
-- Safe vs unsafe zones
-
-Respond with ONLY valid JSON (no markdown, no explanation):
-{{
-  "overall_integrity": "intact" or "minor_damage" or "compromised" or "severe_damage" or "collapse_imminent",
-  "integrity_score": 0.0-1.0,
+_STRUCTURAL_JSON_SCHEMA = """{
+  "overall_integrity": "intact|minor_damage|compromised|severe_damage|collapse_imminent",
+  "integrity_score": 0.0,
   "zones": [
-    {{"zone_id": "area", "integrity_status": "intact" or "damaged" or "compromised", "safe_to_enter": true or false, "fire_exposure_level": "none" or "low" or "moderate" or "high", "hazards": ["list of hazards"]}}
+    {"zone_id": "area", "integrity_status": "intact|damaged|compromised", "safe_to_enter": true, "fire_exposure_level": "none|low|moderate|high", "hazards": []}
   ],
   "blocked_passages": [
-    {{"passage_id": "door_or_corridor", "from_zone": "zone_a", "to_zone": "zone_b", "blocked_reason": "fire" or "debris" or "collapse", "clearable": true or false}}
+    {"passage_id": "door_or_corridor", "from_zone": "zone_a", "to_zone": "zone_b", "blocked_reason": "fire|debris|collapse", "clearable": true}
   ],
-  "load_bearing_status": {{"walls_compromised": [], "columns_compromised": [], "roof_status": "intact" or "compromised" or "collapsed"}},
-  "collapse_risk": "none" or "low" or "moderate" or "high" or "imminent",
-  "degradation_timeline": {{"current_risk": "low" or "moderate" or "high", "time_to_critical": null}},
-  "confidence": 0.0-1.0
-}}"""
+  "collapse_risk": "none|low|moderate|high|imminent",
+  "confidence": 0.0
+}"""
 
-EVACUATION_PROMPT_TEMPLATE = """You are an emergency evacuation planner. Based on this building image and upstream analysis, compute evacuation routes.
-
-Fire analysis: {fire_context}
-Structural analysis: {structural_context}
-
-Respond with ONLY valid JSON (no markdown, no explanation):
-{{
+_EVACUATION_JSON_SCHEMA = """{
   "civilian_routes": [
-    {{"route_id": "civ_route_1", "priority": 1, "start_zone": "zone", "exit_point": "exit_name", "path": ["zone_a", "corridor", "exit"], "safety_score": 0.0-1.0, "estimated_time_seconds": 60, "status": "open" or "congested" or "blocked"}}
+    {"route_id": "civ_route_1", "priority": 1, "start_zone": "zone", "exit_point": "exit_name", "path": ["zone_a", "corridor", "exit"], "safety_score": 0.0, "estimated_time_seconds": 60, "status": "open|congested|blocked"}
   ],
   "firefighter_routes": [
-    {{"route_id": "ff_route_1", "entry_point": "entry_name", "target_zone": "zone", "purpose": "fire_attack" or "search_rescue", "safety_score": 0.0-1.0, "equipment_required": ["SCBA"]}}
+    {"route_id": "ff_route_1", "entry_point": "entry_name", "target_zone": "zone", "purpose": "fire_attack|search_rescue", "safety_score": 0.0, "equipment_required": ["SCBA"]}
   ],
   "exits": [
-    {{"exit_id": "exit_name", "status": "open" or "blocked" or "congested", "capacity_per_minute": 30}}
+    {"exit_id": "exit_name", "status": "open|blocked|congested", "capacity_per_minute": 30}
   ],
-  "estimated_occupancy": {{"total": 75, "by_zone": {{}}}},
-  "confidence": 0.0-1.0
-}}"""
+  "estimated_occupancy": {"total": 75},
+  "confidence": 0.0
+}"""
 
-PERSONNEL_PROMPT_TEMPLATE = """You are an incident commander planning firefighter deployment. Based on this building image and all upstream analysis, recommend personnel and tactics.
-
-Fire analysis: {fire_context}
-Structural analysis: {structural_context}
-Evacuation analysis: {evacuation_context}
-
-Respond with ONLY valid JSON (no markdown, no explanation):
-{{
-  "incident_classification": {{"type": "structure_fire", "alarm_level": 1-3, "complexity": "routine" or "moderate" or "complex"}},
-  "team_composition": {{
-    "total_personnel": 12-30,
+_PERSONNEL_JSON_SCHEMA = """{
+  "incident_classification": {"type": "structure_fire", "alarm_level": 2, "complexity": "routine|moderate|complex"},
+  "team_composition": {
+    "total_personnel": 18,
     "units": [
-      {{"unit_type": "engine" or "ladder" or "rescue" or "ems" or "battalion_chief", "count": 1, "role": "description", "personnel_per_unit": 4}}
+      {"unit_type": "engine|ladder|rescue|ems|battalion_chief", "count": 1, "role": "description", "personnel_per_unit": 4}
     ]
-  }},
-  "equipment": {{
-    "critical": [{{"item": "name", "quantity": 1, "reason": "why"}}]
-  }},
-  "approach_strategy": {{
-    "mode": "offensive" or "defensive",
+  },
+  "equipment": {
+    "critical": [{"item": "name", "quantity": 1, "reason": "why"}]
+  },
+  "approach_strategy": {
+    "mode": "offensive|defensive",
     "primary_objective": "description"
-  }},
-  "timing": {{
+  },
+  "timing": {
     "eta_first_unit_minutes": 4,
     "eta_full_assignment_minutes": 8,
     "estimated_containment_minutes": 15
-  }},
-  "confidence": 0.0-1.0
-}}"""
+  },
+  "confidence": 0.0
+}"""
 
 
 def _build_prompt(team_type: str, context: dict[str, Any] | None) -> str:
-    """Build the vision model prompt for a given team type."""
+    """Build the vision model prompt for a given team type.
+
+    Uses string concatenation instead of .format() so JSON examples
+    keep clean single braces (no {{ }} escaping that confuses the model).
+    """
     ctx = context or {}
 
     if team_type == "fire_severity":
@@ -146,24 +123,42 @@ def _build_prompt(team_type: str, context: dict[str, Any] | None) -> str:
 
     if team_type == "structural":
         fire_ctx = json.dumps(ctx.get("fire_severity", {"fire_detected": False}), indent=2)
-        return STRUCTURAL_PROMPT_TEMPLATE.format(fire_context=fire_ctx)
+        return (
+            "You are a certified structural engineer performing a building safety inspection for a training simulation. "
+            "Analyze this image and assess the building's structural condition.\n\n"
+            "Context from a prior environmental survey:\n" + fire_ctx + "\n\n"
+            "Assess:\n"
+            "- Condition of walls, columns, floors, and ceiling\n"
+            "- Whether passages are clear or obstructed\n"
+            "- Overall structural soundness\n"
+            "- Which zones are safe to occupy\n\n"
+            "Respond with ONLY valid JSON (no markdown, no explanation):\n"
+            + _STRUCTURAL_JSON_SCHEMA
+        )
 
     if team_type == "evacuation":
         fire_ctx = json.dumps(ctx.get("fire_severity", {}), indent=2)
         structural_ctx = json.dumps(ctx.get("structural", {}), indent=2)
-        return EVACUATION_PROMPT_TEMPLATE.format(
-            fire_context=fire_ctx,
-            structural_context=structural_ctx,
+        return (
+            "You are a building safety consultant planning exit routes for a training exercise. "
+            "Based on this building image and the prior assessments, determine the safest paths to exits.\n\n"
+            "Environmental survey:\n" + fire_ctx + "\n\n"
+            "Structural assessment:\n" + structural_ctx + "\n\n"
+            "Respond with ONLY valid JSON (no markdown, no explanation):\n"
+            + _EVACUATION_JSON_SCHEMA
         )
 
     if team_type == "personnel":
         fire_ctx = json.dumps(ctx.get("fire_severity", {}), indent=2)
         structural_ctx = json.dumps(ctx.get("structural", {}), indent=2)
         evacuation_ctx = json.dumps(ctx.get("evacuation", {}), indent=2)
-        return PERSONNEL_PROMPT_TEMPLATE.format(
-            fire_context=fire_ctx,
-            structural_context=structural_ctx,
-            evacuation_context=evacuation_ctx,
+        return (
+            "You are an incident commander planning firefighter deployment. Based on this building image and all upstream analysis, recommend personnel and tactics.\n\n"
+            "Fire analysis:\n" + fire_ctx + "\n\n"
+            "Structural analysis:\n" + structural_ctx + "\n\n"
+            "Evacuation analysis:\n" + evacuation_ctx + "\n\n"
+            "Respond with ONLY valid JSON (no markdown, no explanation):\n"
+            + _PERSONNEL_JSON_SCHEMA
         )
 
     raise ValueError(f"Unknown team_type: {team_type}")
