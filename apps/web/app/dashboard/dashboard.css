@@ -1,0 +1,178 @@
+/* ---------------------------------------------------------------------------
+   PyroSight Dashboard — Leaflet theme overrides
+   Fire-tinted dark map with glassmorphism controls
+   --------------------------------------------------------------------------- */
+
+/* Fire-tinted map tiles via CSS filter (GPU-composited, zero JS) */
+.leaflet-tile-pane {
+  filter: brightness(0.6) sepia(0.5) hue-rotate(-15deg) saturate(2.5) contrast(1.1);
+}
+
+/* Container background */
+.leaflet-container {
+  background: var(--background);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+/* ---------------------------------------------------------------------------
+   Zoom controls — dark glassmorphism
+   --------------------------------------------------------------------------- */
+.leaflet-control-zoom {
+  border: 1px solid var(--grid-line) !important;
+  border-radius: 0 !important;
+  background: hsl(0 0% 5% / 0.8) !important;
+  backdrop-filter: blur(12px);
+}
+
+.leaflet-control-zoom a {
+  background: transparent !important;
+  color: var(--fire-orange) !important;
+  border-color: var(--grid-line) !important;
+  border-radius: 0 !important;
+  font-family: var(--font-mono), ui-monospace, monospace !important;
+  font-weight: 600;
+  width: 32px !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  font-size: 16px !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: hsl(0 0% 10% / 0.9) !important;
+  color: var(--fire-amber) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Attribution — dark translucent
+   --------------------------------------------------------------------------- */
+.leaflet-control-attribution {
+  background: hsl(0 0% 5% / 0.7) !important;
+  color: hsl(0 0% 40%) !important;
+  font-family: var(--font-mono), ui-monospace, monospace !important;
+  font-size: 8px !important;
+  backdrop-filter: blur(8px);
+  border-radius: 0 !important;
+  padding: 2px 6px !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--fire-orange) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Popup — fire-themed dark
+   --------------------------------------------------------------------------- */
+.leaflet-popup-content-wrapper {
+  background: hsl(0 0% 6% / 0.92) !important;
+  color: var(--foreground) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--grid-line) !important;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 0 20px hsl(0 0% 0% / 0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: hsl(0 0% 6% / 0.92) !important;
+  border: 1px solid var(--grid-line) !important;
+  box-shadow: none !important;
+}
+
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+  font-family: var(--font-mono), ui-monospace, monospace !important;
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--muted-foreground) !important;
+  font-size: 16px !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: var(--fire-orange) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Truck marker pulse ring — reuses pulse-ring keyframe from globals.css
+   --------------------------------------------------------------------------- */
+.fire-truck-marker {
+  position: relative;
+}
+
+.fire-truck-marker::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  border-radius: 0;
+  border: 1px solid currentColor;
+  opacity: 0;
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   Incident center marker — dual-ring pulsing
+   --------------------------------------------------------------------------- */
+.incident-center-marker {
+  position: relative;
+}
+
+.incident-center-marker::before,
+.incident-center-marker::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 0;
+}
+
+/* Fast inner ring */
+.incident-center-marker::before {
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid var(--fire-red);
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* Slow dashed outer ring */
+.incident-center-marker::after {
+  width: 44px;
+  height: 44px;
+  border: 1px dashed var(--fire-orange);
+  opacity: 0.5;
+  animation: pulse-ring 3s ease-out infinite 0.5s;
+}
+
+/* ---------------------------------------------------------------------------
+   Scan-line overlay — reuses scan-line keyframe from globals.css
+   --------------------------------------------------------------------------- */
+.dashboard-scan-line {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  opacity: 0.08;
+}
+
+.dashboard-scan-line::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--fire-orange) 20%,
+    var(--fire-amber) 50%,
+    var(--fire-orange) 80%,
+    transparent 100%
+  );
+  animation: scan-line 8s linear infinite;
+}
