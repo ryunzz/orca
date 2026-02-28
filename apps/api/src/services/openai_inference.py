@@ -1,7 +1,7 @@
-"""OpenAI GPT-4o-mini vision inference for ORCA agent teams.
+"""Azure OpenAI GPT-5-mini vision inference for ORCA agent teams.
 
-Fast, cheap alternative to Modal/Ollama for fire image analysis.
-Requires OPENAI_API_KEY in environment.
+Uses Azure-hosted GPT-5-mini for fast fire image analysis.
+Requires AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT in environment.
 """
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import httpx
+from openai import AsyncAzureOpenAI
 
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 
-OPENAI_MODEL = "gpt-4o-mini"
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+AZURE_API_VERSION = "2024-12-01-preview"
+DEPLOYMENT_NAME = "gpt-5-mini"
 
 FIRE_SEVERITY_PROMPT = """Analyze this image of a building scene for fire conditions. You are an expert fire investigator.
 
@@ -101,20 +101,30 @@ def _parse_json_response(raw: str) -> dict[str, Any]:
     return {"raw_response": raw}
 
 
+def _get_client() -> AsyncAzureOpenAI:
+    """Create Azure OpenAI async client."""
+    settings = get_settings()
+    if not settings.azure_openai_api_key:
+        raise RuntimeError("AZURE_OPENAI_API_KEY not configured")
+
+    return AsyncAzureOpenAI(
+        api_key=settings.azure_openai_api_key,
+        azure_endpoint=settings.azure_openai_endpoint,
+        api_version=AZURE_API_VERSION,
+    )
+
+
 async def call_openai_vision(
     image_b64: str,
     media_type: str,
     prompt: str,
 ) -> dict[str, Any]:
-    """Call OpenAI GPT-4o-mini with a vision prompt."""
-    settings = get_settings()
-    api_key = settings.openai_api_key
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY not configured")
+    """Call Azure GPT-5-mini with a vision prompt."""
+    client = _get_client()
 
-    payload = {
-        "model": OPENAI_MODEL,
-        "messages": [
+    response = await client.chat.completions.create(
+        model=DEPLOYMENT_NAME,
+        messages=[
             {
                 "role": "user",
                 "content": [
@@ -129,23 +139,14 @@ async def call_openai_vision(
                 ],
             }
         ],
-        "max_tokens": 1024,
-        "temperature": 0.1,
-    }
+        max_completion_tokens=2048,
+    )
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            OPENAI_API_URL,
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-        )
-        resp.raise_for_status()
-
-    body = resp.json()
-    raw = body["choices"][0]["message"]["content"].strip()
+    content = response.choices[0].message.content or ""
+    raw = content.strip()
+    if not raw:
+        logger.warning("Azure OpenAI returned empty content, finish_reason=%s", response.choices[0].finish_reason)
+        return {"raw_response": "", "error": "empty response from model"}
     return _parse_json_response(raw)
 
 
@@ -155,7 +156,7 @@ async def run_single_team_openai(
     context: dict[str, Any] | None = None,
     frame_id: str = "frame_0",
 ) -> dict[str, Any]:
-    """Run a single agent team's analysis using OpenAI Vision."""
+    """Run a single agent team's analysis using Azure OpenAI Vision."""
     prompt = TEAM_PROMPTS.get(team_type)
 
     if not prompt:
@@ -167,5 +168,5 @@ async def run_single_team_openai(
     result = await call_openai_vision(image_b64, media_type, prompt)
     result["frame_id"] = frame_id
     result["timestamp"] = datetime.now(timezone.utc).isoformat()
-    result["model"] = OPENAI_MODEL
+    result["model"] = DEPLOYMENT_NAME
     return result

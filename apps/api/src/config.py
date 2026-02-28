@@ -19,8 +19,9 @@ class Settings:
     openclaw_api_key: str | None = os.getenv("OPENCLAW_API_KEY")
     world_model_api_key: str | None = os.getenv("WORLD_MODEL_API_KEY")
     world_model_endpoint: str | None = os.getenv("WORLD_MODEL_ENDPOINT")
-    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
-    # Inference mode: "local" (stubs), "cloud" (Modal/HTTP), "anthropic" (Claude Vision), "openai" (GPT-4o-mini)
+    azure_openai_api_key: str | None = os.getenv("AZURE_OPENAI_API_KEY")
+    azure_openai_endpoint: str = os.getenv("AZURE_OPENAI_ENDPOINT", "https://aritraintelligence.cognitiveservices.azure.com/")
+    # Inference mode: "local" (stubs), "cloud" (Modal/HTTP), "anthropic" (Claude Vision), "openai" (Azure GPT-5-mini)
     inference_mode: str = os.getenv("ORCA_INFERENCE_MODE", "local")
 
 
