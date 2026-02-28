@@ -44,19 +44,38 @@
   - Personnel strategy references blocked passages and entry points
 - Cross-team data flow confirmed: Fire → Structural → Evacuation → Personnel
 
+### 2026-02-28 ~04:15 — Fallback, Tests, Demo Endpoint
+- Created `packages/world-models/src/fallback.py`:
+  - Pre-computed Siebel Center fire/structural data for demo reliability
+  - `get_all_fallbacks()` runs all 4 teams from static data
+- Wired fallback into `vision.py`:
+  - Auto-detects missing ANTHROPIC_API_KEY → uses fallback
+  - Try/except on API calls → graceful fallback on any error
+- Added 16-test comprehensive suite (`packages/world-models/tests/test_pipeline.py`):
+  - Fire severity (fallback data, deep copy isolation)
+  - Structural analysis (schema validation)
+  - Fire spread (basic, adjacency, no-fire, stairwell amplification)
+  - Evacuation (route generation, fire avoidance, safe-when-no-fire)
+  - Personnel (basic, alarm escalation, minor incident)
+  - Full pipeline (4-team fallback, vision fallback, routing)
+- Added GET `/api/analysis/demo` endpoint (no image/API key needed)
+- Fixed cross-package import collision (api/src vs world-models/src) using importlib
+
 ### Remaining:
 - **P2-C2** (tune on real frames) — BLOCKED on Krish's World Labs frames
-- **Phase 3** — validation and pitch prep
 
 ### Files created/modified this session:
-- `packages/world-models/src/vision.py` (new)
+- `packages/world-models/src/vision.py` (new + fallback integration)
 - `packages/world-models/src/evacuation.py` (new)
 - `packages/world-models/src/personnel.py` (new)
 - `packages/world-models/src/fire_sim.py` (extended)
+- `packages/world-models/src/fallback.py` (new)
+- `packages/world-models/src/__init__.py` (new)
+- `packages/world-models/tests/test_pipeline.py` (new — 16 tests)
 - `packages/routing/src/graph.py` (extended)
 - `packages/routing/src/optimizer.py` (extended)
-- `apps/api/src/services/analysis.py` (new)
-- `apps/api/src/routers/analysis.py` (new)
+- `apps/api/src/services/analysis.py` (new + importlib fix)
+- `apps/api/src/routers/analysis.py` (new + demo endpoint)
 - `apps/api/src/models/analysis.py` (new)
 - `apps/api/src/main.py` (added analysis router)
 - `apps/api/src/routers/simulation.py` (added export endpoint)
