@@ -36,7 +36,7 @@ STARTUP_WAIT_SECONDS = int(os.environ.get("OLLAMA_STARTUP_WAIT_SECONDS", "60"))
 INFERENCE_TIMEOUT_SECONDS = int(os.environ.get("OLLAMA_INFERENCE_TIMEOUT_SECONDS", "420"))
 SCALEDOWN_WINDOW_SECONDS = int(os.environ.get("MODAL_SCALEDOWN_WINDOW_SECONDS", "1800"))
 MAX_CONTAINERS = int(os.environ.get("MODAL_MAX_CONTAINERS", "2"))
-OLLAMA_NUM_PREDICT = int(os.environ.get("OLLAMA_NUM_PREDICT", "512"))
+OLLAMA_NUM_PREDICT = int(os.environ.get("OLLAMA_NUM_PREDICT", "2048"))
 OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 
 
@@ -108,6 +108,8 @@ class VisionModel:
             "keep_alive": OLLAMA_KEEP_ALIVE,
             "options": {
                 "num_predict": OLLAMA_NUM_PREDICT,
+                "repeat_penalty": 1.3,
+                "temperature": 0.1,
             },
         }).encode()
 

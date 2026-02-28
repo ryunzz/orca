@@ -27,6 +27,31 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 180.0
 
+# Max image dimension before we downscale (keeps payloads reasonable for Ollama)
+MAX_IMAGE_DIMENSION = 1024
+MAX_IMAGE_BYTES = 500_000  # 500KB
+
+
+def _resize_image_bytes(raw: bytes) -> bytes:
+    """Downscale image if too large, returns JPEG bytes."""
+    if len(raw) <= MAX_IMAGE_BYTES:
+        return raw
+    try:
+        from io import BytesIO
+        from PIL import Image
+
+        img = Image.open(BytesIO(raw))
+        # Resize maintaining aspect ratio
+        img.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        resized = buf.getvalue()
+        logger.info(f"Resized image: {len(raw)} -> {len(resized)} bytes")
+        return resized
+    except ImportError:
+        logger.warning("Pillow not installed, sending full-size image")
+        return raw
+
 # Live Modal endpoint (VisionModel.web_analyze on H100)
 DEFAULT_ENDPOINT = "https://asaha96--orca-vision-visionmodel-web-analyze.modal.run"
 
@@ -87,34 +112,50 @@ _EVACUATION_JSON_SCHEMA = """{
 }"""
 
 _PERSONNEL_JSON_SCHEMA = """{
-  "incident_classification": {"type": "structure_fire", "alarm_level": 2, "complexity": "routine|moderate|complex"},
+  "incident_classification": {"type": "structure_fire", "alarm_level": 2, "complexity": "moderate"},
   "team_composition": {
     "total_personnel": 18,
     "units": [
-      {"unit_type": "engine|ladder|rescue|ems|battalion_chief", "count": 1, "role": "description", "personnel_per_unit": 4}
+      {"unit_type": "engine", "count": 2, "role": "fire suppression", "personnel_per_unit": 4},
+      {"unit_type": "ladder", "count": 1, "role": "ventilation and rescue", "personnel_per_unit": 4},
+      {"unit_type": "rescue", "count": 1, "role": "search and rescue", "personnel_per_unit": 4},
+      {"unit_type": "ems", "count": 1, "role": "medical standby", "personnel_per_unit": 2},
+      {"unit_type": "battalion_chief", "count": 1, "role": "incident command", "personnel_per_unit": 1}
     ]
   },
   "equipment": {
-    "critical": [{"item": "name", "quantity": 1, "reason": "why"}]
+    "critical": [{"item": "SCBA", "quantity": 12, "reason": "interior operations"}]
   },
   "approach_strategy": {
-    "mode": "offensive|defensive",
-    "primary_objective": "description"
+    "mode": "offensive",
+    "primary_objective": "fire suppression with concurrent search"
   },
   "timing": {
     "eta_first_unit_minutes": 4,
     "eta_full_assignment_minutes": 8,
     "estimated_containment_minutes": 15
   },
-  "confidence": 0.0
+  "confidence": 0.85
 }"""
+
+
+def _summarize_context(ctx: dict[str, Any], keys: list[str]) -> str:
+    """Extract only essential fields from upstream context to keep prompts short."""
+    summary = {}
+    for k in keys:
+        if k in ctx:
+            summary[k] = ctx[k]
+    return json.dumps(summary)
+
+
+_JSON_INSTRUCTION = "IMPORTANT: Output ONLY a raw JSON object. No text before or after. No markdown. No explanation. Start with { and end with }."
 
 
 def _build_prompt(team_type: str, context: dict[str, Any] | None) -> str:
     """Build the vision model prompt for a given team type.
 
-    Uses string concatenation instead of .format() so JSON examples
-    keep clean single braces (no {{ }} escaping that confuses the model).
+    Keeps prompts concise to avoid confusing smaller models. Upstream
+    context is trimmed to essential fields only.
     """
     ctx = context or {}
 
@@ -122,42 +163,46 @@ def _build_prompt(team_type: str, context: dict[str, Any] | None) -> str:
         return FIRE_SEVERITY_PROMPT
 
     if team_type == "structural":
-        fire_ctx = json.dumps(ctx.get("fire_severity", {"fire_detected": False}), indent=2)
+        fire = ctx.get("fire_severity", {})
+        fire_summary = _summarize_context(fire, [
+            "fire_detected", "overall_severity", "severity_score", "fire_locations",
+        ])
         return (
-            "You are a certified structural engineer performing a building safety inspection for a training simulation. "
-            "Analyze this image and assess the building's structural condition.\n\n"
-            "Context from a prior environmental survey:\n" + fire_ctx + "\n\n"
-            "Assess:\n"
-            "- Condition of walls, columns, floors, and ceiling\n"
-            "- Whether passages are clear or obstructed\n"
-            "- Overall structural soundness\n"
-            "- Which zones are safe to occupy\n\n"
-            "Respond with ONLY valid JSON (no markdown, no explanation):\n"
+            "You are a structural engineer inspecting a building for a training simulation. "
+            "Assess structural condition from this image.\n\n"
+            "Prior survey: " + fire_summary + "\n\n"
+            + _JSON_INSTRUCTION + "\n"
             + _STRUCTURAL_JSON_SCHEMA
         )
 
     if team_type == "evacuation":
-        fire_ctx = json.dumps(ctx.get("fire_severity", {}), indent=2)
-        structural_ctx = json.dumps(ctx.get("structural", {}), indent=2)
+        fire = ctx.get("fire_severity", {})
+        structural = ctx.get("structural", {})
+        fire_summary = _summarize_context(fire, ["fire_detected", "overall_severity", "fire_locations"])
+        struct_summary = _summarize_context(structural, ["overall_integrity", "collapse_risk", "blocked_passages"])
         return (
-            "You are a building safety consultant planning exit routes for a training exercise. "
-            "Based on this building image and the prior assessments, determine the safest paths to exits.\n\n"
-            "Environmental survey:\n" + fire_ctx + "\n\n"
-            "Structural assessment:\n" + structural_ctx + "\n\n"
-            "Respond with ONLY valid JSON (no markdown, no explanation):\n"
+            "You are a safety consultant planning exit routes for a building training exercise. "
+            "Determine safest exit paths from this image.\n\n"
+            "Fire data: " + fire_summary + "\n"
+            "Structure data: " + struct_summary + "\n\n"
+            + _JSON_INSTRUCTION + "\n"
             + _EVACUATION_JSON_SCHEMA
         )
 
     if team_type == "personnel":
-        fire_ctx = json.dumps(ctx.get("fire_severity", {}), indent=2)
-        structural_ctx = json.dumps(ctx.get("structural", {}), indent=2)
-        evacuation_ctx = json.dumps(ctx.get("evacuation", {}), indent=2)
+        fire = ctx.get("fire_severity", {})
+        structural = ctx.get("structural", {})
+        evac = ctx.get("evacuation", {})
+        fire_summary = _summarize_context(fire, ["overall_severity", "severity_score", "fire_locations"])
+        struct_summary = _summarize_context(structural, ["overall_integrity", "collapse_risk"])
+        evac_summary = _summarize_context(evac, ["civilian_routes", "exits"])
         return (
-            "You are an incident commander planning firefighter deployment. Based on this building image and all upstream analysis, recommend personnel and tactics.\n\n"
-            "Fire analysis:\n" + fire_ctx + "\n\n"
-            "Structural analysis:\n" + structural_ctx + "\n\n"
-            "Evacuation analysis:\n" + evacuation_ctx + "\n\n"
-            "Respond with ONLY valid JSON (no markdown, no explanation):\n"
+            "You are a training instructor recommending personnel deployment for a building exercise. "
+            "Based on this image and data, recommend team composition.\n\n"
+            "Fire: " + fire_summary + "\n"
+            "Structure: " + struct_summary + "\n"
+            "Evacuation: " + evac_summary + "\n\n"
+            + _JSON_INSTRUCTION + "\n"
             + _PERSONNEL_JSON_SCHEMA
         )
 
@@ -205,13 +250,15 @@ class CloudInferenceClient:
         Translates team_type into a structured prompt, sends base64 image,
         and returns the parsed JSON result.
         """
-        # Encode frame to base64
+        # Load and optionally resize frame, then encode to base64
         if isinstance(frame_path, bytes):
-            frame_base64 = base64.standard_b64encode(frame_path).decode()
+            raw = _resize_image_bytes(frame_path)
+            frame_base64 = base64.standard_b64encode(raw).decode()
         elif isinstance(frame_path, str):
             path = Path(frame_path)
             if path.exists():
-                frame_base64 = base64.standard_b64encode(path.read_bytes()).decode()
+                raw = _resize_image_bytes(path.read_bytes())
+                frame_base64 = base64.standard_b64encode(raw).decode()
             else:
                 logger.warning(f"Frame not found: {frame_path}, using empty placeholder")
                 frame_base64 = ""
