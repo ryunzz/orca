@@ -115,6 +115,80 @@ AFTER (Hybrid Parallel):
 - P2-B4: Add error handling, timeouts, retries (partially done with 30s timeout)
 - P2-B5: Full end-to-end verification
 
+---
+
+### [2026-02-28 02:30] — Global Agent Network + Modal Deployment
+
+**What**: Implemented global agent connectivity infrastructure. Any OpenClaw agent can now connect to the ORCA network with a single HTTP request.
+
+**Files Created**:
+- `packages/modal-deploy/` — NEW: Modal deployment package
+  - `src/vision_endpoint.py` — Gemini 2.0 Flash vision analysis (fire_severity, structural)
+  - `src/agent_registry.py` — Agent registration, task distribution, result collection
+  - `pyproject.toml` — Dependencies: modal, google-genai, pillow, redis
+  - `README.md` — Deployment instructions
+- `apps/api/src/services/cloud_inference.py` — NEW: Async HTTP client for calling Modal endpoints
+- `apps/api/.env.example` — NEW: Full configuration reference
+- `AGENT_CONNECT.md` — NEW: One-page onboarding doc for external agents
+
+**Files Modified**:
+- `apps/api/src/services/orchestrator.py` — Added inference mode switching:
+  - `_analyze_cloud()` — calls Modal endpoints
+  - `_analyze_anthropic()` — calls Claude Vision directly
+  - `_analyze_local()` — stub data (default)
+- `apps/api/src/config.py` — Added `ORCA_INFERENCE_MODE` setting (local/cloud/anthropic)
+- `apps/api/pyproject.toml` — Added `httpx>=0.27.0` dependency
+
+**Architecture**:
+```
+External Agent                    ORCA Network (Modal)
+─────────────────                ─────────────────────
+1. POST /register ─────────────► Agent Registry
+   {"name":"x", "team":"fire"}   Returns: agent_id, poll_url
+
+2. GET /poll-task ◄────────────► Task Queue
+   Receives: frame_base64        Orchestrator queues tasks
+
+3. POST /submit-result ────────► Results Store
+   {"result": {...}}             Aggregated for consensus
+```
+
+**Key Endpoints**:
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/register` | POST | Join network, get agent_id |
+| `/poll-task?agent_id=X` | GET | Get next frame to analyze |
+| `/submit-result` | POST | Submit analysis result |
+| `/analyze-endpoint` | POST | Direct vision analysis (Gemini) |
+
+**Decisions**:
+- Using Gemini 2.0 Flash instead of Anthropic Claude (10x cheaper: ~$0.001/frame)
+- No GPU required — Gemini API handles inference
+- Agent registry is stateless (in-memory) for hackathon; Redis-backed for production
+- Fallback to local stubs if cloud unavailable (graceful degradation)
+
+**One-liner to connect any agent**:
+```bash
+curl -X POST https://orca-vision--register.modal.run \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-agent","team":"fire_severity"}'
+```
+
+**Deploy Commands**:
+```bash
+modal secret create google-secret GOOGLE_API_KEY=<key>
+modal deploy packages/modal-deploy/src/vision_endpoint.py
+modal deploy packages/modal-deploy/src/agent_registry.py
+```
+
+**Blockers**: None
+
+**Next**:
+- Deploy to Modal (need Google AI API key)
+- Test end-to-end with real images
+- Connect frontend to cloud inference
+- Demo optimization
+
 <!--
 Example entry format:
 
