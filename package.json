@@ -1,6 +1,9 @@
 {
   "name": "hackillinois26",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
