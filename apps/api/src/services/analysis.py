@@ -8,13 +8,35 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# Add world-models package to path for imports
-_world_models_path = Path(__file__).resolve().parents[4] / "packages" / "world-models"
-if str(_world_models_path) not in sys.path:
-    sys.path.insert(0, str(_world_models_path))
+# Import world-models modules using a namespace alias to avoid conflict with api's src/
+_here = Path(__file__).resolve()
+_repo_root = _here
+while _repo_root != _repo_root.parent:
+    if (_repo_root / "packages" / "world-models").is_dir():
+        break
+    _repo_root = _repo_root.parent
+_wm_src = _repo_root / "packages" / "world-models" / "src"
 
-from src.vision import analyze_frame  # noqa: E402
-from src.fire_sim import build_spread_timeline  # noqa: E402
+import importlib.util as _ilu  # noqa: E402
+
+
+def _load_wm_module(name: str):
+    """Load a module from packages/world-models/src/ by name."""
+    spec = _ilu.spec_from_file_location(
+        f"wm_{name}", _wm_src / f"{name}.py",
+        submodule_search_locations=[str(_wm_src)],
+    )
+    mod = _ilu.module_from_spec(spec)
+    sys.modules[f"wm_{name}"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_vision = _load_wm_module("vision")
+_fire_sim = _load_wm_module("fire_sim")
+
+analyze_frame = _vision.analyze_frame
+build_spread_timeline = _fire_sim.build_spread_timeline
 
 
 async def run_full_analysis(

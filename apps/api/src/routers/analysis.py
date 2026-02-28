@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Any
 
-from ..services.analysis import run_full_analysis, run_single_team
+from ..services.analysis import run_full_analysis, run_single_team, _load_wm_module
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -70,3 +70,23 @@ async def run_team(request: SingleTeamRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/demo")
+async def demo_analysis(frame_id: str = "siebel_demo_001"):
+    """Return a complete demo analysis using pre-computed fallback data.
+
+    No image or API key required. Returns all 4 teams' results plus fire spread
+    timeline for the Siebel Center scenario. Use this for frontend development
+    and live demos.
+    """
+    _fallback = _load_wm_module("fallback")
+    _fire_sim = _load_wm_module("fire_sim")
+
+    results = _fallback.get_all_fallbacks(frame_id)
+    return {
+        "simulation_id": "demo",
+        "frame_id": frame_id,
+        "teams": results,
+        "spread_timeline": _fire_sim.build_spread_timeline(results["fire_severity"]),
+    }
