@@ -39,8 +39,11 @@ export function SplatViewer({ spzUrl, alternateWorldId }: SplatViewerProps) {
         </Suspense>
       </Canvas>
 
-      {loading && !error && !transitioning && (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80">
+      {!error && !transitioning && (
+        <div
+          className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black transition-opacity duration-700"
+          style={{ opacity: loading ? 1 : 0 }}
+        >
           <Loader2
             className="size-6 animate-spin"
             style={{ color: "var(--fire-orange, oklch(0.752 0.217 52.149))" }}
