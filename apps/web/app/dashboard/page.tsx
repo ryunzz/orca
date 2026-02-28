@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { AnalysisProvider } from "@/contexts/analysis-context";
 import "./dashboard.css";
 
 const DashboardMap = dynamic(
@@ -25,5 +26,9 @@ const DashboardMap = dynamic(
 );
 
 export default function DashboardPage() {
-  return <DashboardMap />;
+  return (
+    <AnalysisProvider>
+      <DashboardMap />
+    </AnalysisProvider>
+  );
 }

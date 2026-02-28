@@ -4,12 +4,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Flame } from "lucide-react";
 import {
-  INCIDENT_DATA,
-  FIRE_TRUCKS,
   TRUCK_STATUS_COLORS,
   SEVERITY_COLORS,
   SEVERITY_TEXT_CLASSES,
 } from "@/lib/dashboard-constants";
+import { useAnalysisContext } from "@/contexts/analysis-context";
 
 // ---------------------------------------------------------------------------
 // Flickering temperature hook — random ±5 fluctuation every 2-3s
@@ -87,6 +86,8 @@ function DataRow({
 // IncidentPanel
 // ---------------------------------------------------------------------------
 export function IncidentPanel() {
+  const { incident: INCIDENT_DATA, trucks: FIRE_TRUCKS } = useAnalysisContext();
+
   const roofTemp = useFlickeringValue(INCIDENT_DATA.temperatures.roof);
   const interiorTemp = useFlickeringValue(INCIDENT_DATA.temperatures.interior);
   const exteriorTemp = useFlickeringValue(INCIDENT_DATA.temperatures.exterior);

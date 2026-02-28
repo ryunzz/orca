@@ -2,8 +2,8 @@ from __future__ import annotations
 
 """Pre-computed fallback results for demo reliability.
 
-If the Claude Vision API is down, slow, or the ANTHROPIC_API_KEY is not set,
-the pipeline falls back to these pre-computed results for the Siebel Center demo.
+If Ollama is unavailable or the vision pipeline is too slow,
+the system falls back to these pre-computed results for the Siebel Center demo.
 These match the shared/schemas/ exactly.
 """
 

@@ -7,12 +7,16 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
-import anthropic
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from .fallback import get_fallback_fire_severity, get_fallback_structural
 
 logger = logging.getLogger(__name__)
+
+VISION_BACKEND = os.environ.get("VISION_BACKEND", "ollama")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2-vision:11b")
 
 
 FIRE_SEVERITY_PROMPT = """Analyze this image of a building scene for fire conditions. You are an expert fire investigator.
@@ -59,7 +63,7 @@ Respond with ONLY valid JSON, no other text."""
 
 
 def _encode_image(frame: bytes | str) -> tuple[str, str]:
-    """Encode an image for the Anthropic API. Returns (base64_data, media_type)."""
+    """Encode an image for the vision API. Returns (base64_data, media_type)."""
     if isinstance(frame, str):
         path = Path(frame)
         suffix = path.suffix.lower()
@@ -78,87 +82,91 @@ def _encode_image(frame: bytes | str) -> tuple[str, str]:
         return data, "image/jpeg"
 
 
-def _get_client() -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+def _call_vision_ollama(image_data: str, media_type: str, prompt: str) -> dict[str, Any]:
+    """Send image + prompt to Ollama and parse JSON response."""
+    payload = json.dumps({
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "images": [image_data],
+        "stream": False,
+    }).encode()
 
-
-def _call_vision(client: anthropic.Anthropic, image_data: str, media_type: str, prompt: str) -> dict[str, Any]:
-    """Send image + prompt to Claude Vision and parse JSON response."""
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2048,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": image_data,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": prompt,
-                    },
-                ],
-            }
-        ],
+    req = Request(
+        f"{OLLAMA_BASE_URL}/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
-    raw = message.content[0].text.strip()
-    # Strip markdown code fences if present
+    with urlopen(req, timeout=120) as resp:
+        body = json.loads(resp.read())
+
+    raw = body.get("response", "").strip()
+    return _parse_json_response(raw)
+
+
+def _parse_json_response(raw: str) -> dict[str, Any]:
+    """Parse JSON from model response, stripping markdown fences if present."""
     if raw.startswith("```"):
         lines = raw.split("\n")
         lines = lines[1:]  # remove opening fence
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         raw = "\n".join(lines)
+    # Some models wrap in extra text — find the JSON object
+    start = raw.find("{")
+    end = raw.rfind("}") + 1
+    if start >= 0 and end > start:
+        raw = raw[start:end]
     return json.loads(raw)
 
 
+def _call_vision(image_data: str, media_type: str, prompt: str) -> dict[str, Any]:
+    """Send image + prompt to the Ollama vision backend."""
+    return _call_vision_ollama(image_data, media_type, prompt)
+
+
 def _api_available() -> bool:
-    """Check if the Anthropic API key is configured."""
-    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    return len(key) > 0
+    """Check if Ollama is reachable."""
+    try:
+        urlopen(f"{OLLAMA_BASE_URL}/api/tags", timeout=2)
+        return True
+    except (URLError, OSError):
+        return False
 
 
 def analyze_fire_severity(frame: bytes | str, frame_id: str = "unknown") -> dict[str, Any]:
     """Analyze a frame for fire severity. This is the Fire Severity Team brain."""
     if not _api_available():
-        logger.warning("ANTHROPIC_API_KEY not set — using fallback fire severity data")
+        logger.warning("Ollama unavailable — using fallback fire severity data")
         return get_fallback_fire_severity(frame_id)
 
     try:
-        client = _get_client()
         image_data, media_type = _encode_image(frame)
-        result = _call_vision(client, image_data, media_type, FIRE_SEVERITY_PROMPT)
+        result = _call_vision(image_data, media_type, FIRE_SEVERITY_PROMPT)
         result["frame_id"] = frame_id
         result["timestamp"] = datetime.now(timezone.utc).isoformat()
         return result
     except Exception as exc:
-        logger.error("Vision API call failed for fire severity: %s — using fallback", exc)
+        logger.error("Vision call failed for fire severity: %s — using fallback", exc)
         return get_fallback_fire_severity(frame_id)
 
 
 def analyze_structural(frame: bytes | str, fire_context: dict[str, Any] | None = None, frame_id: str = "unknown") -> dict[str, Any]:
     """Analyze a frame for structural integrity. This is the Structural Analysis Team brain."""
     if not _api_available():
-        logger.warning("ANTHROPIC_API_KEY not set — using fallback structural data")
+        logger.warning("Ollama unavailable — using fallback structural data")
         return get_fallback_structural(frame_id)
 
     try:
-        client = _get_client()
         image_data, media_type = _encode_image(frame)
         fire_ctx_str = json.dumps(fire_context, indent=2) if fire_context else '{"severity": 0, "fire_locations": []}'
         prompt = STRUCTURAL_ANALYSIS_PROMPT.format(fire_context=fire_ctx_str)
-        result = _call_vision(client, image_data, media_type, prompt)
+        result = _call_vision(image_data, media_type, prompt)
         result["frame_id"] = frame_id
         result["timestamp"] = datetime.now(timezone.utc).isoformat()
         return result
     except Exception as exc:
-        logger.error("Vision API call failed for structural: %s — using fallback", exc)
+        logger.error("Vision call failed for structural: %s — using fallback", exc)
         return get_fallback_structural(frame_id)
 
 

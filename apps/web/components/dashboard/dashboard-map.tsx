@@ -13,11 +13,10 @@ import {
   MAP_MAX_ZOOM,
   TILE_URL,
   TILE_ATTRIBUTION,
-  FIRE_TRUCKS,
-  HEAT_MAP_POINTS,
   HEAT_GRADIENT,
   HEAT_LAYER_OPTIONS,
 } from "@/lib/dashboard-constants";
+import { useAnalysisContext } from "@/contexts/analysis-context";
 
 import { FireHeatLayer } from "./fire-heat-layer";
 import { FireTruckMarker } from "./fire-truck-marker";
@@ -78,6 +77,8 @@ const heatOptions = {
 // DashboardMap — main orchestrator
 // ---------------------------------------------------------------------------
 export function DashboardMap() {
+  const { trucks: FIRE_TRUCKS, heatMapPoints: HEAT_MAP_POINTS } = useAnalysisContext();
+
   const center = useMemo<[number, number]>(
     () => [INCIDENT_CENTER.LAT, INCIDENT_CENTER.LNG],
     []
