@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import anthropic
+
+from .fallback import get_fallback_fire_severity, get_fallback_structural
+
+logger = logging.getLogger(__name__)
 
 
 FIRE_SEVERITY_PROMPT = """Analyze this image of a building scene for fire conditions. You are an expert fire investigator.
@@ -113,30 +118,48 @@ def _call_vision(client: anthropic.Anthropic, image_data: str, media_type: str, 
     return json.loads(raw)
 
 
+def _api_available() -> bool:
+    """Check if the Anthropic API key is configured."""
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    return len(key) > 0
+
+
 def analyze_fire_severity(frame: bytes | str, frame_id: str = "unknown") -> dict[str, Any]:
     """Analyze a frame for fire severity. This is the Fire Severity Team brain."""
-    client = _get_client()
-    image_data, media_type = _encode_image(frame)
-    result = _call_vision(client, image_data, media_type, FIRE_SEVERITY_PROMPT)
+    if not _api_available():
+        logger.warning("ANTHROPIC_API_KEY not set — using fallback fire severity data")
+        return get_fallback_fire_severity(frame_id)
 
-    result["frame_id"] = frame_id
-    result["timestamp"] = datetime.now(timezone.utc).isoformat()
-    return result
+    try:
+        client = _get_client()
+        image_data, media_type = _encode_image(frame)
+        result = _call_vision(client, image_data, media_type, FIRE_SEVERITY_PROMPT)
+        result["frame_id"] = frame_id
+        result["timestamp"] = datetime.now(timezone.utc).isoformat()
+        return result
+    except Exception as exc:
+        logger.error("Vision API call failed for fire severity: %s — using fallback", exc)
+        return get_fallback_fire_severity(frame_id)
 
 
 def analyze_structural(frame: bytes | str, fire_context: dict[str, Any] | None = None, frame_id: str = "unknown") -> dict[str, Any]:
     """Analyze a frame for structural integrity. This is the Structural Analysis Team brain."""
-    client = _get_client()
-    image_data, media_type = _encode_image(frame)
+    if not _api_available():
+        logger.warning("ANTHROPIC_API_KEY not set — using fallback structural data")
+        return get_fallback_structural(frame_id)
 
-    fire_ctx_str = json.dumps(fire_context, indent=2) if fire_context else '{"severity": 0, "fire_locations": []}'
-    prompt = STRUCTURAL_ANALYSIS_PROMPT.format(fire_context=fire_ctx_str)
-
-    result = _call_vision(client, image_data, media_type, prompt)
-
-    result["frame_id"] = frame_id
-    result["timestamp"] = datetime.now(timezone.utc).isoformat()
-    return result
+    try:
+        client = _get_client()
+        image_data, media_type = _encode_image(frame)
+        fire_ctx_str = json.dumps(fire_context, indent=2) if fire_context else '{"severity": 0, "fire_locations": []}'
+        prompt = STRUCTURAL_ANALYSIS_PROMPT.format(fire_context=fire_ctx_str)
+        result = _call_vision(client, image_data, media_type, prompt)
+        result["frame_id"] = frame_id
+        result["timestamp"] = datetime.now(timezone.utc).isoformat()
+        return result
+    except Exception as exc:
+        logger.error("Vision API call failed for structural: %s — using fallback", exc)
+        return get_fallback_structural(frame_id)
 
 
 async def analyze_frame(
