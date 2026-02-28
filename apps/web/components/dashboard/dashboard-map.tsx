@@ -34,6 +34,7 @@ import {
 } from "@/lib/dashboard-constants";
 
 import { fetchBuildingStreetView } from "@/lib/street-view";
+import { enhanceImages } from "@/lib/image-enhance";
 import {
   generateWorld,
   listWorlds,
@@ -52,6 +53,7 @@ import {
   type SelectedBuilding,
 } from "./building-prompt-dialog";
 import { MapSearch } from "./map-search";
+import { createFireOverlay } from "@/lib/fire-overlay";
 
 // ---------------------------------------------------------------------------
 // Token
@@ -459,6 +461,7 @@ export function DashboardMap() {
   const [selectedBuilding, setSelectedBuilding] =
     useState<SelectedBuilding | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [statusText, setStatusText] = useState("");
   const highlightedIdRef = useRef<string | number | null>(null);
 
   // Analysis data from backend (auto-starts demo on connect).
@@ -474,6 +477,8 @@ export function DashboardMap() {
   const claimedCoordsRef = useRef<Set<string>>(new Set());
   // Polling interval handle
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Active fire overlay layer IDs (keyed by coordinate)
+  const fireOverlayIdsRef = useRef<Set<string>>(new Set());
 
   // -----------------------------------------------------------------------
   // Reset building highlight
@@ -656,6 +661,8 @@ export function DashboardMap() {
     async (prompt: string) => {
       if (!selectedBuilding) return;
 
+      // Phase 1: Fetch street view images
+      setStatusText("Fetching views...");
       const result = await fetchBuildingStreetView(
         selectedBuilding.coordinates,
         selectedBuilding.name
@@ -669,6 +676,7 @@ export function DashboardMap() {
 
       if (available.length === 0) {
         toast.error("No street view imagery available for this location");
+        setStatusText("");
         handleClose();
         return;
       }
@@ -677,13 +685,23 @@ export function DashboardMap() {
       const displayName = `${result.buildingName} (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 
       try {
-        const response = await generateWorld({
-          displayName,
-          textPrompt: prompt,
+        // Phase 2: Enhance images with fire/smoke effects
+        setStatusText("Enhancing images...");
+        const enhanced = await enhanceImages({
           images: available.map((img: { url: string; heading: number }) => ({
             url: img.url,
             heading: img.heading,
           })),
+          prompt,
+          buildingName: result.buildingName,
+        });
+
+        // Phase 3: Send enhanced images to World Labs
+        setStatusText("Creating 3D world...");
+        const response = await generateWorld({
+          displayName,
+          textPrompt: prompt,
+          images: enhanced.images,
         });
 
         // Save to localStorage
@@ -704,14 +722,24 @@ export function DashboardMap() {
         // Add pending marker to the map
         if (mapRef.current) {
           addPendingMarker(mapRef.current, scenario);
+
+          // Add fire particle overlay on the building
+          const fireId = `fire-${coordKey(lat, lng)}`;
+          if (!mapRef.current.getLayer(fireId)) {
+            const fireLayer = createFireOverlay(fireId, [lng, lat]);
+            mapRef.current.addLayer(fireLayer);
+            fireOverlayIdsRef.current.add(fireId);
+          }
         }
 
         // Start polling if not already running
         startPolling();
 
+        setStatusText("");
         handleClose();
         toast.success(`Scenario is being created for ${result.buildingName}`);
       } catch (err) {
+        setStatusText("");
         handleClose();
         const message = err instanceof Error ? err.message : "Unknown error";
         toast.error(`Scenario creation failed: ${message}`);
@@ -939,6 +967,10 @@ export function DashboardMap() {
         marker.remove();
       }
       pendingMarkersRef.current.clear();
+      for (const fireId of fireOverlayIdsRef.current) {
+        if (map.getLayer(fireId)) map.removeLayer(fireId);
+      }
+      fireOverlayIdsRef.current.clear();
       mapRef.current = null;
       map.remove();
     };
@@ -963,6 +995,7 @@ export function DashboardMap() {
             building={selectedBuilding}
             onClose={handleClose}
             onSubmit={handlePromptSubmit}
+            statusText={statusText}
           />
         )}
       </AnimatePresence>

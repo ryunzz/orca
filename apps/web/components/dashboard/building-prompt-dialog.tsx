@@ -20,6 +20,7 @@ interface BuildingPromptDialogProps {
   building: SelectedBuilding;
   onClose: () => void;
   onSubmit: (prompt: string) => Promise<void>;
+  statusText?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,7 @@ export function BuildingPromptDialog({
   building,
   onClose,
   onSubmit,
+  statusText,
 }: BuildingPromptDialogProps) {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -203,7 +205,7 @@ export function BuildingPromptDialog({
             {isLoading ? (
               <>
                 <Loader2 className="size-3 animate-spin" />
-                <span className="ml-1.5">Generating</span>
+                <span className="ml-1.5">{statusText || "Generating"}</span>
               </>
             ) : (
               "Submit"
