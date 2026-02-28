@@ -68,15 +68,15 @@
 
 ## Phase 3 (Hours 18-28) — Validation & Pitch Prep
 
-- [ ] **P3-C1** Validate all agent outputs for demo scenario:
+- [x] **P3-C1** Validate all agent outputs for demo scenario:
   - Walk through every frame, verify outputs are sensible
   - No "severity: 2" on raging fire, no evacuation through blocked hallway
-- [ ] **P3-C2** Prepare technical talking points for judge Q&A:
+- [x] **P3-C2** Prepare technical talking points for judge Q&A:
   - Why you chose your vision model
   - How fire spread prediction works (rule-based, NFPA-based)
   - How cross-team data flow works
   - Limitations and future improvements
-- [ ] **P3-C3** Prepare data export demo:
+- [x] **P3-C3** Prepare data export demo:
   - Sample packaged dataset for fire departments / robotics labs
   - Clean, well-structured, annotated data with documentation
 

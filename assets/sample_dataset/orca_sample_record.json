@@ -1,0 +1,546 @@
+{
+  "dataset_info": {
+    "name": "ORCA Emergency Response Training Dataset",
+    "version": "1.0",
+    "description": "AI-generated fire analysis data from synthetic building environments. Contains multi-agent assessment of fire severity, structural integrity, evacuation routes, and personnel deployment recommendations.",
+    "generated_by": "ORCA Platform \u2014 World Model + Agent Swarm Pipeline",
+    "use_cases": [
+      "First responder training simulations",
+      "Autonomous robot navigation in fire environments",
+      "AI model training for emergency decision support",
+      "Fire department tactical planning exercises"
+    ],
+    "data_format": "JSON",
+    "schema_version": "1.0"
+  },
+  "environment": {
+    "building": "Siebel Center for Computer Science",
+    "location": {
+      "lat": 40.1138,
+      "lng": -88.2249
+    },
+    "floors": 2,
+    "rooms": 12,
+    "environment_type": "burning_building"
+  },
+  "analysis": {
+    "fire_severity": {
+      "severity": 7,
+      "fire_locations": [
+        {
+          "label": "Room 201",
+          "intensity": 0.85,
+          "x": 0.45,
+          "y": 0.35,
+          "radius": 0.25
+        },
+        {
+          "label": "Hallway B",
+          "intensity": 0.35,
+          "x": 0.3,
+          "y": 0.5,
+          "radius": 0.1
+        }
+      ],
+      "fuel_sources": [
+        {
+          "material": "furniture",
+          "flammability": "high",
+          "location_label": "Room 201"
+        },
+        {
+          "material": "carpet",
+          "flammability": "medium",
+          "location_label": "Hallway B"
+        },
+        {
+          "material": "paper",
+          "flammability": "high",
+          "location_label": "Room 201"
+        }
+      ],
+      "smoke_density": "moderate",
+      "confidence": 0.91,
+      "frame_id": "siebel_center_frame_001",
+      "timestamp": "2026-02-28T06:42:30.637240+00:00"
+    },
+    "structural_analysis": {
+      "objects": [
+        {
+          "type": "door",
+          "condition": "intact",
+          "location_label": "Lobby entrance",
+          "x": 0.15,
+          "y": 0.9,
+          "notes": "Main entry point"
+        },
+        {
+          "type": "door",
+          "condition": "damaged",
+          "location_label": "Room 201 entrance",
+          "x": 0.4,
+          "y": 0.5,
+          "notes": "Heat damage to frame"
+        },
+        {
+          "type": "wall",
+          "condition": "damaged",
+          "location_label": "Room 201 south wall",
+          "x": 0.55,
+          "y": 0.75,
+          "notes": "Cracking visible"
+        },
+        {
+          "type": "stairwell",
+          "condition": "intact",
+          "location_label": "Stairwell A",
+          "x": 0.1,
+          "y": 0.85
+        },
+        {
+          "type": "window",
+          "condition": "compromised",
+          "location_label": "Room 201 east window",
+          "x": 0.7,
+          "y": 0.25,
+          "notes": "Glass broken from heat"
+        },
+        {
+          "type": "fire_extinguisher",
+          "condition": "intact",
+          "location_label": "Hallway A south wall",
+          "x": 0.25,
+          "y": 0.6
+        },
+        {
+          "type": "exit_sign",
+          "condition": "intact",
+          "location_label": "Hallway A",
+          "x": 0.2,
+          "y": 0.55
+        },
+        {
+          "type": "furniture",
+          "condition": "destroyed",
+          "location_label": "Room 201 desk area",
+          "x": 0.5,
+          "y": 0.3,
+          "notes": "Fully engulfed"
+        }
+      ],
+      "integrity_score": 6,
+      "blocked_passages": [
+        {
+          "passage": "Room 201 entrance",
+          "reason": "fire",
+          "severity": "partial"
+        }
+      ],
+      "collapse_risk": "low",
+      "degradation_timeline": {
+        "minutes_to_concern": 12,
+        "minutes_to_critical": 25,
+        "factors": [
+          "active fire near load-bearing wall",
+          "high fuel load"
+        ]
+      },
+      "frame_id": "siebel_center_frame_001",
+      "timestamp": "2026-02-28T06:42:30.637545+00:00"
+    },
+    "evacuation_routes": {
+      "civilian_exits": [
+        {
+          "route_id": "civ_Hallway A_0",
+          "path": [
+            "Hallway A",
+            "Lobby"
+          ],
+          "risk_level": "dangerous",
+          "estimated_time_seconds": 30,
+          "hazards": [],
+          "recommended": true
+        },
+        {
+          "route_id": "civ_Hallway A_1",
+          "path": [
+            "Hallway A",
+            "Hallway B",
+            "Stairwell A",
+            "Lobby"
+          ],
+          "risk_level": "dangerous",
+          "estimated_time_seconds": 60,
+          "hazards": [
+            "fire in Hallway B (intensity 0.3)"
+          ],
+          "recommended": false
+        },
+        {
+          "route_id": "civ_Room 101_0",
+          "path": [
+            "Room 101",
+            "Hallway A",
+            "Lobby"
+          ],
+          "risk_level": "dangerous",
+          "estimated_time_seconds": 45,
+          "hazards": [],
+          "recommended": true
+        },
+        {
+          "route_id": "civ_Room 101_1",
+          "path": [
+            "Room 101",
+            "Hallway A",
+            "Hallway B",
+            "Stairwell A",
+            "Lobby"
+          ],
+          "risk_level": "dangerous",
+          "estimated_time_seconds": 75,
+          "hazards": [
+            "fire in Hallway B (intensity 0.3)"
+          ],
+          "recommended": false
+        },
+        {
+          "route_id": "civ_Room 102_0",
+          "path": [
+            "Room 102",
+            "Hallway A",
+            "Lobby"
+          ],
+          "risk_level": "dangerous",
+          "estimated_time_seconds": 45,
+          "hazards": [],
+          "recommended": true
+        },
+        {
+          "route_id": "civ_Room 102_1",
+          "path": [
+            "Room 102",
+            "Hallway A",
+            "Hallway B",
+            "Stairwell A",
+            "Lobby"
+          ],
+          "risk_level": "dangerous",
+          "estimated_time_seconds": 75,
+          "hazards": [
+            "fire in Hallway B (intensity 0.3)"
+          ],
+          "recommended": false
+        }
+      ],
+      "firefighter_entries": [
+        {
+          "route_id": "ff_Room 201_0",
+          "path": [
+            "Lobby",
+            "Hallway A",
+            "Hallway B",
+            "Room 201"
+          ],
+          "risk_level": "blocked",
+          "objective": "Fire source in Room 201",
+          "equipment_needed": [
+            "SCBA",
+            "thermal_imaging_camera",
+            "halligan_tool"
+          ],
+          "recommended": true
+        },
+        {
+          "route_id": "ff_Hallway B_0",
+          "path": [
+            "Lobby",
+            "Hallway A",
+            "Hallway B"
+          ],
+          "risk_level": "dangerous",
+          "objective": "Fire source in Hallway B",
+          "equipment_needed": [
+            "SCBA",
+            "thermal_imaging_camera",
+            "halligan_tool"
+          ],
+          "recommended": true
+        },
+        {
+          "route_id": "ff_Hallway B_1",
+          "path": [
+            "Lobby",
+            "Stairwell A",
+            "Hallway B"
+          ],
+          "risk_level": "dangerous",
+          "objective": "Fire source in Hallway B",
+          "equipment_needed": [
+            "SCBA",
+            "thermal_imaging_camera",
+            "halligan_tool"
+          ],
+          "recommended": false
+        }
+      ],
+      "risk_scores": {
+        "Lobby": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Hallway A": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Room 101": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Room 102": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Hallway B": {
+          "fire_risk": 0.35,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Room 201": {
+          "fire_risk": 0.85,
+          "structural_risk": 0.6,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.85
+        },
+        "Room 202": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Stairwell A": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Floor 2 Landing": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Hallway C": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Room 301": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        },
+        "Room 302": {
+          "fire_risk": 0.0,
+          "structural_risk": 0.1,
+          "smoke_risk": 0.5,
+          "combined_risk": 0.5
+        }
+      },
+      "frame_id": "unknown",
+      "timestamp": "2026-02-28T06:42:30.637714+00:00"
+    },
+    "personnel_recommendation": {
+      "firefighters": 18,
+      "trucks": [
+        {
+          "type": "engine",
+          "count": 3
+        },
+        {
+          "type": "ladder",
+          "count": 1
+        },
+        {
+          "type": "rescue",
+          "count": 1
+        }
+      ],
+      "equipment": [
+        {
+          "item": "SCBA",
+          "quantity": 18,
+          "priority": "critical"
+        },
+        {
+          "item": "hose_line",
+          "quantity": 2,
+          "priority": "critical"
+        },
+        {
+          "item": "halligan_tool",
+          "quantity": 2,
+          "priority": "critical"
+        },
+        {
+          "item": "thermal_imaging_camera",
+          "quantity": 1,
+          "priority": "critical"
+        }
+      ],
+      "eta_containment_min": 20,
+      "strategy": "Defensive operations \u2014 surround and drown, via Lobby, ventilate roof, establish water supply from nearest hydrant, avoid blocked passages: Room 201 entrance",
+      "alarm_level": 3,
+      "staging_location": "100m upwind of building entrance",
+      "priority_actions": [
+        "Establish incident command",
+        "Request additional alarm \u2014 upgrade to mutual aid",
+        "Initiate defensive operations \u2014 master streams",
+        "Establish water supply",
+        "Request ventilation \u2014 open roof or positive pressure",
+        "Account for all personnel \u2014 PAR check"
+      ],
+      "timestamp": "2026-02-28T06:42:30.637729+00:00"
+    }
+  },
+  "predictions": {
+    "fire_spread_timeline": [
+      {
+        "room": "Lobby",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.772,
+        "intensity_10min": 1.0,
+        "time_to_danger_min": 3,
+        "time_to_flashover_min": 6,
+        "risk_factors": []
+      },
+      {
+        "room": "Hallway A",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.845,
+        "intensity_10min": 1.0,
+        "time_to_danger_min": 3,
+        "time_to_flashover_min": 5,
+        "risk_factors": []
+      },
+      {
+        "room": "Room 101",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.661,
+        "intensity_10min": 0.973,
+        "time_to_danger_min": 5,
+        "time_to_flashover_min": 8,
+        "risk_factors": []
+      },
+      {
+        "room": "Room 102",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.661,
+        "intensity_10min": 0.973,
+        "time_to_danger_min": 5,
+        "time_to_flashover_min": 8,
+        "risk_factors": []
+      },
+      {
+        "room": "Hallway B",
+        "current_intensity": 0.35,
+        "intensity_5min": 1.0,
+        "intensity_10min": 1.0,
+        "time_to_danger_min": 2,
+        "time_to_flashover_min": 3,
+        "risk_factors": [
+          "adjacent room has active fire"
+        ]
+      },
+      {
+        "room": "Room 201",
+        "current_intensity": 0.85,
+        "intensity_5min": 1.0,
+        "intensity_10min": 1.0,
+        "time_to_danger_min": 0,
+        "time_to_flashover_min": 0,
+        "risk_factors": [
+          "high fuel load accelerates spread",
+          "flashover risk \u2014 room fully involved"
+        ]
+      },
+      {
+        "room": "Room 202",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.661,
+        "intensity_10min": 0.973,
+        "time_to_danger_min": 5,
+        "time_to_flashover_min": 8,
+        "risk_factors": []
+      },
+      {
+        "room": "Stairwell A",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.931,
+        "intensity_10min": 1.0,
+        "time_to_danger_min": 3,
+        "time_to_flashover_min": 4,
+        "risk_factors": [
+          "stairwell enables vertical spread"
+        ]
+      },
+      {
+        "room": "Floor 2 Landing",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.82,
+        "intensity_10min": 1.0,
+        "time_to_danger_min": 3,
+        "time_to_flashover_min": 5,
+        "risk_factors": [
+          "stairwell enables vertical spread"
+        ]
+      },
+      {
+        "room": "Hallway C",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.833,
+        "intensity_10min": 1.0,
+        "time_to_danger_min": 3,
+        "time_to_flashover_min": 5,
+        "risk_factors": []
+      },
+      {
+        "room": "Room 301",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.661,
+        "intensity_10min": 0.973,
+        "time_to_danger_min": 5,
+        "time_to_flashover_min": 8,
+        "risk_factors": []
+      },
+      {
+        "room": "Room 302",
+        "current_intensity": 0.35,
+        "intensity_5min": 0.661,
+        "intensity_10min": 0.973,
+        "time_to_danger_min": 5,
+        "time_to_flashover_min": 8,
+        "risk_factors": []
+      }
+    ]
+  },
+  "metadata": {
+    "total_agents": 4,
+    "agents_per_team": 3,
+    "consensus_method": "weighted_average",
+    "vision_model": "claude-sonnet-4-20250514",
+    "processing_time_ms": 4200,
+    "frame_resolution": "1920x1080"
+  }
+}
