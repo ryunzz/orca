@@ -35,10 +35,10 @@ const AnalysisContext = createContext<AnalysisContextValue | null>(null);
 export function AnalysisProvider({ children }: { children: ReactNode }) {
   const { teams, runningTeam, connectionStatus, loading } = useAnalysis();
 
-  const hasData = Object.keys(teams).length > 0;
-  const incident = hasData ? mapIncidentData(teams) : FALLBACK_INCIDENT;
-  const trucks = hasData ? mapFireTrucks(teams) : [...FALLBACK_TRUCKS];
-  const heatMapPoints = hasData ? mapHeatMapPoints(teams) : FALLBACK_HEAT;
+  // TODO: restore fallback after verifying backend wiring
+  const incident = mapIncidentData(teams);
+  const trucks = mapFireTrucks(teams);
+  const heatMapPoints = mapHeatMapPoints(teams);
 
   return (
     <AnalysisContext.Provider

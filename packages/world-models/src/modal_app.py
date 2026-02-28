@@ -26,6 +26,8 @@ ollama_image = (
     )
 )
 
+web_image = modal.Image.debian_slim(python_version="3.11").pip_install("fastapi[standard]")
+
 app = modal.App("orca-vision")
 
 
@@ -62,13 +64,22 @@ class VisionModel:
         else:
             raise RuntimeError("Ollama failed to start within 30 seconds")
 
-        # Warm up the model so weights are loaded into GPU memory
+        # Warm up the model with a tiny image so vision pathway is fully initialized
+        import base64
         import logging
         logger = logging.getLogger(__name__)
-        logger.info("Warming up llama3.2-vision:11b...")
+        logger.info("Warming up llama3.2-vision:11b with vision warmup...")
+        # 1x1 red pixel PNG
+        tiny_image = base64.b64encode(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+            b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
+            b"\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00"
+            b"\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+        ).decode()
         warmup_payload = json.dumps({
             "model": "llama3.2-vision:11b",
-            "prompt": "hi",
+            "prompt": "What color is this?",
+            "images": [tiny_image],
             "stream": False,
         }).encode()
         from urllib.request import Request
@@ -80,7 +91,7 @@ class VisionModel:
         )
         with urlopen(warmup_req, timeout=120) as resp:
             resp.read()
-        logger.info("Model warmed up")
+        logger.info("Vision model warmed up")
 
     @modal.exit()
     def stop_ollama(self) -> None:
@@ -137,6 +148,25 @@ class VisionModel:
         if start >= 0 and end > start:
             raw = raw[start:end]
         return json.loads(raw)
+
+
+@app.function(image=web_image, timeout=180)
+@modal.fastapi_endpoint(method="POST")
+def analyze_endpoint(item: dict) -> dict:
+    """Public HTTP endpoint for vision analysis.
+
+    POST JSON: {"image": "<base64>", "prompt": "..."}
+    Returns: parsed JSON from the vision model.
+
+    The endpoint itself is lightweight (no GPU) — it forwards the
+    request to VisionModel which runs on a T4 GPU container.
+    """
+    image_data = item.get("image", "")
+    prompt = item.get("prompt", "")
+    if not image_data or not prompt:
+        return {"error": "Both 'image' (base64) and 'prompt' fields are required."}
+    model = VisionModel()
+    return model.analyze.remote(image_data, prompt)
 
 
 @app.local_entrypoint()

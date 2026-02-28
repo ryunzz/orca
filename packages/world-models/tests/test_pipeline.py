@@ -413,11 +413,11 @@ def test_vision_fallback_no_api_key():
     try:
         from src.vision import analyze_fire_severity, analyze_structural
 
-        fire = analyze_fire_severity(b"\x00\x00", "no_key_test")
+        fire = asyncio.run(analyze_fire_severity(b"\x00\x00", "no_key_test"))
         assert fire["severity"] == 7, "Should use fallback data"
         assert fire["frame_id"] == "no_key_test"
 
-        structural = analyze_structural(b"\x00\x00", None, "no_key_test")
+        structural = asyncio.run(analyze_structural(b"\x00\x00", None, "no_key_test"))
         assert structural["integrity_score"] == 6, "Should use fallback data"
         print("  [PASS] vision falls back without API key")
     finally:

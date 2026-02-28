@@ -120,18 +120,28 @@ def _parse_json_response(raw: str) -> dict[str, Any]:
     return json.loads(raw)
 
 
-def _call_vision_modal(image_data: str, media_type: str, prompt: str) -> dict[str, Any]:
+async def _call_vision_modal(image_data: str, media_type: str, prompt: str) -> dict[str, Any]:
     """Send image + prompt to Modal-hosted Ollama for inference."""
     import modal
 
     VisionModel = modal.Cls.from_name("orca-vision", "VisionModel")
-    return VisionModel().analyze.remote(image_data, prompt)
+    return await VisionModel().analyze.remote.aio(image_data, prompt)
+
+
+async def _call_vision_async(image_data: str, media_type: str, prompt: str) -> dict[str, Any]:
+    """Route vision call to the configured backend (async for Modal)."""
+    if VISION_BACKEND == "modal":
+        return await _call_vision_modal(image_data, media_type, prompt)
+    return _call_vision_ollama(image_data, media_type, prompt)
 
 
 def _call_vision(image_data: str, media_type: str, prompt: str) -> dict[str, Any]:
-    """Route vision call to the configured backend."""
+    """Route vision call to the configured backend (sync, for non-server use)."""
     if VISION_BACKEND == "modal":
-        return _call_vision_modal(image_data, media_type, prompt)
+        import asyncio
+        return asyncio.get_event_loop().run_until_complete(
+            _call_vision_modal(image_data, media_type, prompt)
+        )
     return _call_vision_ollama(image_data, media_type, prompt)
 
 
@@ -146,15 +156,15 @@ def _api_available() -> bool:
         return False
 
 
-def analyze_fire_severity(frame: bytes | str, frame_id: str = "unknown") -> dict[str, Any]:
+async def analyze_fire_severity(frame: bytes | str, frame_id: str = "unknown") -> dict[str, Any]:
     """Analyze a frame for fire severity. This is the Fire Severity Team brain."""
     if not _api_available():
-        logger.warning("Ollama unavailable — using fallback fire severity data")
+        logger.warning("Vision backend unavailable — using fallback fire severity data")
         return get_fallback_fire_severity(frame_id)
 
     try:
         image_data, media_type = _encode_image(frame)
-        result = _call_vision(image_data, media_type, FIRE_SEVERITY_PROMPT)
+        result = await _call_vision_async(image_data, media_type, FIRE_SEVERITY_PROMPT)
         result["frame_id"] = frame_id
         result["timestamp"] = datetime.now(timezone.utc).isoformat()
         return result
@@ -163,17 +173,17 @@ def analyze_fire_severity(frame: bytes | str, frame_id: str = "unknown") -> dict
         return get_fallback_fire_severity(frame_id)
 
 
-def analyze_structural(frame: bytes | str, fire_context: dict[str, Any] | None = None, frame_id: str = "unknown") -> dict[str, Any]:
+async def analyze_structural(frame: bytes | str, fire_context: dict[str, Any] | None = None, frame_id: str = "unknown") -> dict[str, Any]:
     """Analyze a frame for structural integrity. This is the Structural Analysis Team brain."""
     if not _api_available():
-        logger.warning("Ollama unavailable — using fallback structural data")
+        logger.warning("Vision backend unavailable — using fallback structural data")
         return get_fallback_structural(frame_id)
 
     try:
         image_data, media_type = _encode_image(frame)
         fire_ctx_str = json.dumps(fire_context, indent=2) if fire_context else '{"severity": 0, "fire_locations": []}'
         prompt = STRUCTURAL_ANALYSIS_PROMPT.format(fire_context=fire_ctx_str)
-        result = _call_vision(image_data, media_type, prompt)
+        result = await _call_vision_async(image_data, media_type, prompt)
         result["frame_id"] = frame_id
         result["timestamp"] = datetime.now(timezone.utc).isoformat()
         return result
@@ -200,12 +210,11 @@ async def analyze_frame(
         Structured JSON matching the corresponding schema in shared/schemas/
     """
     if team_type == "fire_severity":
-        return analyze_fire_severity(frame, frame_id)
+        return await analyze_fire_severity(frame, frame_id)
     elif team_type == "structural":
         fire_ctx = context.get("fire_severity") if context else None
-        return analyze_structural(frame, fire_ctx, frame_id)
+        return await analyze_structural(frame, fire_ctx, frame_id)
     elif team_type == "evacuation":
-        # Import here to avoid circular deps
         from .evacuation import compute_evacuation_routes
         fire_ctx = context.get("fire_severity") if context else None
         structural_ctx = context.get("structural") if context else None

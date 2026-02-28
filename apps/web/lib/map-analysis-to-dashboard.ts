@@ -43,9 +43,8 @@ export function mapIncidentData(
   const structural = teams.structural;
   const personnel = teams.personnel;
 
-  if (!fire) return FALLBACK_INCIDENT;
-
-  const severity = fire.severity;
+  // TODO: restore fallback after verifying backend wiring
+  const severity = fire?.severity ?? 0;
   const temps = severityToTemps(severity);
   const integrityScore = structural?.integrity_score ?? 6;
 
@@ -70,8 +69,9 @@ export function mapFireTrucks(
 export function mapHeatMapPoints(
   teams: Partial<AnalysisTeams>,
 ): [number, number, number][] {
+  // TODO: restore fallback after verifying backend wiring
   const fire = teams.fire_severity;
-  if (!fire || !fire.fire_locations.length) return FALLBACK_HEAT;
+  if (!fire || !fire.fire_locations.length) return [];
 
   const points: [number, number, number][] = [];
   for (const loc of fire.fire_locations) {
