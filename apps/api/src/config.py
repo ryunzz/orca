@@ -18,6 +18,8 @@ class Settings:
     openclaw_api_key: str | None = os.getenv("OPENCLAW_API_KEY")
     world_model_api_key: str | None = os.getenv("WORLD_MODEL_API_KEY")
     world_model_endpoint: str | None = os.getenv("WORLD_MODEL_ENDPOINT")
+    # Inference mode: "local" (stubs), "cloud" (Modal/HTTP), "anthropic" (Claude Vision)
+    inference_mode: str = os.getenv("ORCA_INFERENCE_MODE", "local")
 
 
 @lru_cache(maxsize=1)

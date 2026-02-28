@@ -13,6 +13,11 @@ HYBRID PARALLEL EXECUTION:
   2. Merge phase: incorporate upstream team results from Redis
 - Teams poll Redis for upstream dependencies with timeout
 - Reduces total latency by overlapping independent work
+
+INFERENCE MODES:
+- local: Use stub/mock data (fast, no external deps)
+- cloud: Call Modal-deployed endpoints (global, scalable)
+- anthropic: Use Claude Vision API directly (requires ANTHROPIC_API_KEY)
 """
 from __future__ import annotations
 
@@ -23,6 +28,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+from ..config import get_settings
 from ..redis_client import redis_client
 
 logger = logging.getLogger(__name__)
@@ -72,8 +78,63 @@ class AgentInstance:
 
         Returns partial result that can be computed from frame alone.
         This runs immediately when instance spawns.
+
+        Inference mode determines backend:
+        - local: Returns stub data (fast, no external deps)
+        - cloud: Calls Modal endpoint (global, scalable)
+        - anthropic: Uses Claude Vision API
         """
         self.status = "analyzing_independent"
+        settings = get_settings()
+        inference_mode = settings.inference_mode
+
+        # Cloud inference - call remote endpoint
+        if inference_mode == "cloud":
+            return await self._analyze_cloud(frame_path)
+
+        # Anthropic inference - call Claude Vision API
+        if inference_mode == "anthropic":
+            return await self._analyze_anthropic(frame_path)
+
+        # Local/stub inference (default)
+        return await self._analyze_local(frame_path)
+
+    async def _analyze_cloud(self, frame_path: str) -> dict[str, Any]:
+        """Call cloud-deployed Modal endpoint."""
+        from .cloud_inference import analyze_remote
+
+        try:
+            result = await analyze_remote(
+                team_type=self.team_type.value,
+                frame_path=frame_path,
+                context=None,  # Independent phase has no context
+                frame_id=f"{self.instance_id}_{frame_path}",
+            )
+            result["inference_mode"] = "cloud"
+            return result
+        except Exception as e:
+            logger.warning(f"Cloud inference failed, falling back to local: {e}")
+            return await self._analyze_local(frame_path)
+
+    async def _analyze_anthropic(self, frame_path: str) -> dict[str, Any]:
+        """Call Claude Vision API directly."""
+        try:
+            from .analysis import run_single_team
+
+            result = await run_single_team(
+                frame_path=frame_path,
+                team_type=self.team_type.value,
+                context=None,
+                frame_id=f"{self.instance_id}_{frame_path}",
+            )
+            result["inference_mode"] = "anthropic"
+            return result
+        except Exception as e:
+            logger.warning(f"Anthropic inference failed, falling back to local: {e}")
+            return await self._analyze_local(frame_path)
+
+    async def _analyze_local(self, frame_path: str) -> dict[str, Any]:
+        """Generate local stub data (no external calls)."""
         timestamp = datetime.now(timezone.utc).isoformat()
 
         base = {
@@ -81,6 +142,7 @@ class AgentInstance:
             "confidence": 0.85 + (hash(self.instance_id) % 10) / 100,
             "frame_refs": [frame_path],
             "phase": "independent",
+            "inference_mode": "local",
         }
 
         if self.team_type == TeamType.FIRE_SEVERITY:
@@ -128,6 +190,8 @@ class AgentInstance:
                     "baseline_response": "2-alarm",
                 },
             }
+
+        return base  # Fallback
 
     async def merge_upstream(
         self,
