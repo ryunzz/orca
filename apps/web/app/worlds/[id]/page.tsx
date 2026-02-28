@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { ArrowLeft, Loader2, ExternalLink } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { getWorld, selectSpzUrl, type World } from "@/lib/worldlabs";
@@ -76,17 +76,6 @@ export default function WorldPage({
           {status === "ready" ? world?.display_name : "Loading..."}
         </span>
 
-        {status === "ready" && world?.world_marble_url && (
-          <a
-            href={world.world_marble_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-auto flex items-center gap-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Open in Marble
-            <ExternalLink className="size-3" />
-          </a>
-        )}
       </div>
 
       {/* Content */}
