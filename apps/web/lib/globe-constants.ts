@@ -10,12 +10,9 @@ export const GLOBE_CONFIG = {
   DARK: 1,
   DIFFUSE: 1.2,
   MAP_BASE_COLOR: [0.15, 0.08, 0.03] as [number, number, number],
-  /** Globe dot size */
   DOT_SIZE: 1,
-  /** Globe canvas scale (pixels) */
   WIDTH: 800,
   HEIGHT: 800,
-  /** DPR cap to limit GPU load */
   MAX_DPR: 2,
 } as const;
 
@@ -25,8 +22,22 @@ export const TARGET_LOCATION = {
   LAT: 40.11,
   LNG: -88.21,
   LABEL: "URBANA-CHAMPAIGN",
-  SECTOR: "SECTOR 7-ALPHA",
 } as const;
+
+// ─── Incident Nodes ─────────────────────────────────────────────────────────
+
+export const INCIDENT_NODES = [
+  { lat: 40.71, lng: -74.01, label: "NEW YORK", alertType: "FIRE DETECTED" },
+  { lat: -33.87, lng: 151.21, label: "SYDNEY", alertType: "SEISMIC EVENT" },
+  { lat: 51.51, lng: -0.13, label: "LONDON", alertType: "DEPLOYING AGENTS" },
+  { lat: 34.05, lng: -118.24, label: "LOS ANGELES", alertType: "EVACUATION ACTIVE" },
+  { lat: 35.68, lng: 139.69, label: "TOKYO", alertType: "STRUCTURAL ALERT" },
+  { lat: 19.08, lng: 72.88, label: "MUMBAI", alertType: "FLOOD WARNING" },
+  { lat: 23.42, lng: 3.84, label: "SAHARA", alertType: "SANDSTORM WARNING" },
+  { lat: 4.71, lng: -74.07, label: "BOGOTÁ", alertType: "VOLCANIC ACTIVITY" },
+  { lat: 20.90, lng: -156.33, label: "HAWAII", alertType: "WILDFIRE ALERT" },
+  { lat: -6.21, lng: 106.85, label: "JAKARTA", alertType: "TSUNAMI ALERT" },
+] as const;
 
 // ─── Coordinate Conversion ──────────────────────────────────────────────────
 
@@ -46,31 +57,13 @@ export function latLngToTheta(lat: number): number {
 export const TARGET_PHI = latLngToPhi(TARGET_LOCATION.LNG);
 export const TARGET_THETA = latLngToTheta(TARGET_LOCATION.LAT);
 
-// ─── State Machine Phases ───────────────────────────────────────────────────
-
-export type GlobePhase = "IDLE" | "LOCK" | "SCOPE" | "ZOOM" | "NAVIGATE";
-
-export const PHASE_DURATIONS_MS: Record<
-  Exclude<GlobePhase, "IDLE" | "NAVIGATE">,
-  number
-> = {
-  LOCK: 1200,
-  SCOPE: 800,
-  ZOOM: 1000,
-} as const;
-
 // ─── Idle Spin ──────────────────────────────────────────────────────────────
 
 /** Phi increment per frame during IDLE */
-export const IDLE_SPIN_SPEED = 0.005;
+export const IDLE_SPIN_SPEED = 0.002;
 
-// ─── Radar Config ───────────────────────────────────────────────────────────
-
-/** Full sweep period in seconds */
-export const RADAR_SWEEP_PERIOD_S = 12;
-
-/** Sweep wedge arc in degrees */
-export const RADAR_SWEEP_ARC_DEG = 60;
+/** Initial globe theta (latitude tilt) */
+export const INITIAL_THETA = 0.3;
 
 // ─── Easing Functions ───────────────────────────────────────────────────────
 
@@ -82,6 +75,10 @@ export function easeOutCubic(t: number): number {
   return 1 - (1 - t) * (1 - t) * (1 - t);
 }
 
+export function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 // ─── Shortest-Arc Interpolation ─────────────────────────────────────────────
 
 /** Normalize an angle delta to [-PI, PI] for shortest-arc interpolation */
@@ -89,4 +86,48 @@ export function normalizeAngleDelta(delta: number): number {
   while (delta > Math.PI) delta -= 2 * Math.PI;
   while (delta < -Math.PI) delta += 2 * Math.PI;
   return delta;
+}
+
+// ─── Globe Radius ─────────────────────────────────────────────────────────
+
+/** Cobe sphere radius as fraction of container min-dimension (sqrt(0.64) ≈ 0.8 in NDC → 0.40 of container) */
+export const GLOBE_SCREEN_RADIUS_FACTOR = 0.40;
+
+// ─── Screen Projection ─────────────────────────────────────────────────────
+
+/**
+ * Project a lat/lng coordinate to 2D screen position given the globe's
+ * current rotation. Matches cobe's GLSL shader coordinate system.
+ */
+export function projectToScreen(
+  lat: number,
+  lng: number,
+  globePhi: number,
+  globeTheta: number,
+  centerX: number,
+  centerY: number,
+  radius: number
+): { x: number; y: number; visible: boolean; vz: number } {
+  const latRad = lat * DEG_TO_RAD;
+  const lngRad = lng * DEG_TO_RAD;
+  const phiPlusLng = globePhi + lngRad;
+
+  const cosLat = Math.cos(latRad);
+  const sinLat = Math.sin(latRad);
+  const cosPhiLng = Math.cos(phiPlusLng);
+  const sinPhiLng = Math.sin(phiPlusLng);
+  const cosTheta = Math.cos(globeTheta);
+  const sinTheta = Math.sin(globeTheta);
+
+  // Cobe view-space (derived from cobe's GLSL shader)
+  const vx = cosLat * cosPhiLng;
+  const vy = sinTheta * cosLat * sinPhiLng + cosTheta * sinLat;
+  const vz = -cosTheta * cosLat * sinPhiLng + sinTheta * sinLat;
+
+  // Screen Y is flipped (CSS top-down vs GL bottom-up)
+  const x = centerX + vx * radius;
+  const y = centerY - vy * radius;
+  const visible = vz > 0.15;
+
+  return { x, y, visible, vz };
 }

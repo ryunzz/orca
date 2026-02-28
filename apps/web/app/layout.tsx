@@ -21,9 +21,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PyroSight — AI Fire Intelligence",
+  title: "ORCA — Emergency Intelligence Platform",
   description:
-    "Real-time structural analysis and predictive fire intelligence for emergency first responders.",
+    "AI-powered emergency simulation and predictive intelligence for incident commanders and first responders.",
 };
 
 export default function RootLayout({
@@ -35,6 +35,7 @@ export default function RootLayout({
     <html lang="en" className={`dark ${inter.variable} ${spaceGrotesk.variable}`}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        style={{ backgroundColor: "#212024" }}
       >
         {children}
       </body>

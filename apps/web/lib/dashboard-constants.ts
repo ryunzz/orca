@@ -1,5 +1,3 @@
-import { FIRE_COLORS } from "./constants";
-
 // ---------------------------------------------------------------------------
 // Coordinates — Siebel Center for Computer Science
 // ---------------------------------------------------------------------------
@@ -9,198 +7,132 @@ export const INCIDENT_CENTER = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Map configuration
+// MapBox GL configuration
 // ---------------------------------------------------------------------------
-export const MAP_DEFAULT_ZOOM = 16;
-export const MAP_MIN_ZOOM = 3;
-export const MAP_MAX_ZOOM = 19;
+export const MAPBOX_STYLE = "mapbox://styles/mapbox/dark-v11" as const;
 
-export const TILE_URL =
-  "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png";
-
-export const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
-
-// ---------------------------------------------------------------------------
-// Truck types & statuses
-// ---------------------------------------------------------------------------
-export type TruckStatus = "RESPONDING" | "ON_SCENE" | "STAGED";
-export type TruckType = "ENGINE" | "LADDER" | "RESCUE" | "HAZMAT";
-
-export interface FireTruck {
-  id: string;
-  callsign: string;
-  lat: number;
-  lng: number;
-  heading: number;
-  distanceM: number;
-  speedKmh: number;
-  etaSeconds: number;
-  status: TruckStatus;
-  type: TruckType;
-}
-
-export const FIRE_TRUCKS: FireTruck[] = [
-  {
-    id: "truck-1",
-    callsign: "ENGINE-7",
-    lat: 40.1152,
-    lng: -88.2231,
-    heading: 210,
-    distanceM: 180,
-    speedKmh: 0,
-    etaSeconds: 0,
-    status: "ON_SCENE",
-    type: "ENGINE",
-  },
-  {
-    id: "truck-2",
-    callsign: "LADDER-3",
-    lat: 40.1121,
-    lng: -88.2275,
-    heading: 45,
-    distanceM: 320,
-    speedKmh: 35,
-    etaSeconds: 33,
-    status: "RESPONDING",
-    type: "LADDER",
-  },
-  {
-    id: "truck-3",
-    callsign: "RESCUE-1",
-    lat: 40.1160,
-    lng: -88.2210,
-    heading: 260,
-    distanceM: 410,
-    speedKmh: 0,
-    etaSeconds: 0,
-    status: "STAGED",
-    type: "RESCUE",
-  },
-  {
-    id: "truck-4",
-    callsign: "HAZ-12",
-    lat: 40.1115,
-    lng: -88.2265,
-    heading: 15,
-    distanceM: 250,
-    speedKmh: 42,
-    etaSeconds: 21,
-    status: "RESPONDING",
-    type: "HAZMAT",
-  },
-] as const;
-
-// ---------------------------------------------------------------------------
-// Heat map data — concentrated fire zone around incident center
-// ---------------------------------------------------------------------------
-export const HEAT_MAP_POINTS: [number, number, number][] = [
-  // Core (high intensity)
-  [40.1138, -88.2249, 1.0],
-  [40.1139, -88.2247, 0.95],
-  [40.1137, -88.2251, 0.92],
-  [40.1140, -88.2249, 0.88],
-  [40.1138, -88.2246, 0.85],
-  // Inner ring
-  [40.1141, -88.2244, 0.7],
-  [40.1135, -88.2253, 0.68],
-  [40.1142, -88.2251, 0.62],
-  [40.1134, -88.2245, 0.6],
-  [40.1139, -88.2255, 0.55],
-  // Outer ring (diminishing)
-  [40.1145, -88.2240, 0.35],
-  [40.1131, -88.2258, 0.32],
-  [40.1146, -88.2255, 0.28],
-  [40.1130, -88.2242, 0.25],
-  [40.1135, -88.2260, 0.2],
-  [40.1143, -88.2236, 0.18],
+/** MapBox uses [lng, lat] order */
+export const MAPBOX_CENTER: [number, number] = [
+  INCIDENT_CENTER.LNG,
+  INCIDENT_CENTER.LAT,
 ];
 
-export const HEAT_GRADIENT: Record<number, string> = {
-  0.0: "transparent",
-  0.2: FIRE_COLORS.AMBER,
-  0.45: FIRE_COLORS.ORANGE,
-  0.7: FIRE_COLORS.RED,
-  1.0: "#FF1A1A",
+export const MAPBOX_DEFAULT_ZOOM = 16;
+export const MAPBOX_DEFAULT_PITCH = 60;
+export const MAPBOX_DEFAULT_BEARING = -17.6;
+export const MAPBOX_MIN_ZOOM = 14;
+export const MAPBOX_MAX_ZOOM = 19;
+
+// ---------------------------------------------------------------------------
+// 3D building layer
+// ---------------------------------------------------------------------------
+export const BUILDING_LAYER_ID = "3d-buildings" as const;
+export const BUILDING_SOURCE = "composite" as const;
+export const BUILDING_SOURCE_LAYER = "building" as const;
+
+export const BUILDING_HIGHLIGHT_COLOR = "#F27623" as const;
+export const BUILDING_EXTRUSION_OPACITY = 0.85;
+
+// Height-interpolated building colors — warm browns for fire-orange theme
+export const BUILDING_COLOR_LOW = "#332a22" as const;
+export const BUILDING_COLOR_MID = "#483a30" as const;
+export const BUILDING_COLOR_HIGH = "#584838" as const;
+
+/** Data-driven color expression: taller buildings get lighter shades */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const BUILDING_COLOR_EXPRESSION: any = [
+  "interpolate",
+  ["linear"],
+  ["coalesce", ["get", "height"], 0],
+  0,
+  BUILDING_COLOR_LOW,
+  20,
+  BUILDING_COLOR_MID,
+  60,
+  BUILDING_COLOR_HIGH,
+];
+
+// Vertical gradient + ambient occlusion
+export const BUILDING_VERTICAL_GRADIENT = true;
+export const BUILDING_AO_INTENSITY = 0.4;
+export const BUILDING_AO_GROUND_RADIUS = 3;
+export const BUILDING_AO_WALL_RADIUS = 3;
+
+// Flood lighting — warm amber uplighting
+export const BUILDING_FLOOD_LIGHT_COLOR = "#5a4025" as const;
+export const BUILDING_FLOOD_LIGHT_INTENSITY = 0.25;
+export const BUILDING_FLOOD_LIGHT_GROUND_RADIUS = 3;
+
+// ---------------------------------------------------------------------------
+// 3D lighting (setLights API)
+// ---------------------------------------------------------------------------
+export const AMBIENT_LIGHT = {
+  id: "ambient",
+  type: "ambient" as const,
+  properties: {
+    color: "#c09068",
+    intensity: 0.5,
+  },
 };
 
-export const HEAT_LAYER_OPTIONS = {
-  radius: 35,
-  blur: 25,
-  maxZoom: 17,
-  minOpacity: 0.3,
+export const DIRECTIONAL_LIGHT = {
+  id: "directional",
+  type: "directional" as const,
+  properties: {
+    color: "#ffe0c0",
+    intensity: 0.6,
+    direction: [210, 60] as [number, number],
+    "cast-shadows": true,
+    "shadow-intensity": 0.3,
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Atmospheric fog — warm brown haze to mute dark-v11 cool tones
+// ---------------------------------------------------------------------------
+export const MAP_FOG_CONFIG = {
+  range: [1, 12] as [number, number],
+  color: "#1e1610",
+  "high-color": "#2e2015",
+  "space-color": "#0f0b06",
+  "horizon-blend": 0.06,
+  "star-intensity": 0.0,
 } as const;
 
 // ---------------------------------------------------------------------------
-// Incident data
+// Base map layer overrides — warm up dark-v11 cool tones
+// Applied programmatically after style.load
 // ---------------------------------------------------------------------------
-export type SeverityLevel = "CRITICAL" | "HIGH" | "MODERATE" | "LOW";
-
-export interface IncidentData {
-  id: string;
-  buildingName: string;
-  address: string;
-  fireStatus: string;
-  severity: SeverityLevel;
-  alarmLevel: number;
-  structuralIntegrity: number;
-  temperatures: {
-    roof: number;
-    interior: number;
-    exterior: number;
-  };
-  occupancyEstimate: number;
-  activeFloors: string;
-  spreadDirection: string;
-  windSpeed: number;
-  windDirection: string;
-  dispatchTime: string;
-  elapsedTime: string;
-  sector: string;
-}
-
-export const INCIDENT_DATA: IncidentData = {
-  id: "INC-2026-0228-ALPHA",
-  buildingName: "Siebel Center for CS",
-  address: "201 N Goodwin Ave, Urbana, IL",
-  fireStatus: "ACTIVE — 2ND FLOOR ENGULFED",
-  severity: "CRITICAL",
-  alarmLevel: 3,
-  structuralIntegrity: 64,
-  temperatures: {
-    roof: 1040,
-    interior: 870,
-    exterior: 340,
-  },
-  occupancyEstimate: 12,
-  activeFloors: "2F, 3F (partial)",
-  spreadDirection: "NE @ 2.1 m/min",
-  windSpeed: 18,
-  windDirection: "SW",
-  dispatchTime: "14:32:07 CST",
-  elapsedTime: "00:17:43",
-  sector: "SECTOR 7-ALPHA",
-};
+export const BASE_MAP_OVERRIDES = {
+  /** Background fill — warm near-black instead of cool gray */
+  background: "#14110e",
+  /** Water — deep warm dark instead of cool blue-gray */
+  water: "#0e1520",
+  /** Road colors — warmer tones with better contrast */
+  roadMinor: "#2a2320",
+  roadMajor: "#3d332a",
+  roadHighway: "#4d3d30",
+  /** Land use (parks, etc.) — subtle warm tints */
+  landuse: "#1a1812",
+} as const;
 
 // ---------------------------------------------------------------------------
-// Status color maps
+// Location search — Nominatim (OSM)
 // ---------------------------------------------------------------------------
-export const TRUCK_STATUS_COLORS: Record<TruckStatus, string> = {
-  RESPONDING: FIRE_COLORS.ORANGE,
-  ON_SCENE: FIRE_COLORS.RED,
-  STAGED: FIRE_COLORS.AMBER,
-};
+export const NOMINATIM_BASE_URL =
+  "https://nominatim.openstreetmap.org/search" as const;
+export const NOMINATIM_USER_AGENT = "PyroSight/1.0" as const;
+export const SEARCH_DEBOUNCE_MS = 450;
+export const SEARCH_MAX_RESULTS = 5;
+export const SEARCH_FLY_TO_ZOOM = 16;
+export const SEARCH_FLY_TO_SPEED = 1.2;
 
-export const SEVERITY_COLORS: Record<SeverityLevel, string> = {
-  CRITICAL: "var(--fire-red)",
-  HIGH: "var(--fire-orange)",
-  MODERATE: "var(--fire-amber)",
-  LOW: "var(--fire-yellow)",
-};
-
-export const SEVERITY_TEXT_CLASSES: Record<SeverityLevel, string> = {
-  CRITICAL: "text-[var(--fire-red)]",
-  HIGH: "text-[var(--fire-orange)]",
-  MODERATE: "text-[var(--fire-amber)]",
-  LOW: "text-[var(--fire-yellow)]",
-};
+// ---------------------------------------------------------------------------
+// Google Street View — 360° building imagery
+// ---------------------------------------------------------------------------
+export const STREETVIEW_IMAGE_SIZE = "640x640" as const;
+export const STREETVIEW_FOV = 90;
+export const STREETVIEW_PITCH = 10;
+export const STREETVIEW_OFFSET_RADIUS_M = 50;
+export const STREETVIEW_HEADING_COUNT = 4;
+export const STREETVIEW_HEADINGS = [0, 90, 180, 270] as const;
