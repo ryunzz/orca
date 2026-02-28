@@ -4,9 +4,11 @@ import { useEffect, useState, use } from "react";
 import { ArrowLeft, Loader2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { getWorld, type World } from "@/lib/worldlabs";
+import { getWorld, selectSpzUrl, type World } from "@/lib/worldlabs";
 
-const SplatViewer = dynamic<{ spzUrl: string }>(
+const ALTERNATE_WORLD_ID = "b2d84d7e-5bed-42e4-8e9a-3eef480fc2c4";
+
+const SplatViewer = dynamic<{ spzUrl: string; alternateWorldId?: string }>(
   () => import("@/components/splat-viewer/splat-viewer").then((m) => ({
     default: m.SplatViewer,
   })),
@@ -14,20 +16,6 @@ const SplatViewer = dynamic<{ spzUrl: string }>(
 );
 
 type Status = "loading" | "error" | "ready";
-
-const SPZ_QUALITY_PREFERENCE = ["high", "medium", "low"] as const;
-
-function selectSpzUrl(world: World): string | null {
-  const urls = world.assets?.splats?.spz_urls;
-  if (!urls) return null;
-
-  for (const quality of SPZ_QUALITY_PREFERENCE) {
-    if (urls[quality]) return urls[quality];
-  }
-
-  const values = Object.values(urls) as string[];
-  return values[0] ?? null;
-}
 
 export default function WorldPage({
   params,
@@ -136,7 +124,7 @@ export default function WorldPage({
         )}
 
         {status === "ready" && world && spzUrl && (
-          <SplatViewer spzUrl={spzUrl} />
+          <SplatViewer spzUrl={spzUrl} alternateWorldId={ALTERNATE_WORLD_ID} />
         )}
 
         {status === "ready" && world && !spzUrl && (

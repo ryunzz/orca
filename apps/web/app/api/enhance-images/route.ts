@@ -38,42 +38,67 @@ Fire conditions:
 - Street-level photorealistic quality, maintaining the original camera perspective
 - This should look like an active emergency response scene, not aftermath destruction
 
+Image quality:
+- Fix any black spots, dark patches, visual glitches, or aberrations present in the source image
+- Fill in any missing or corrupted regions with plausible surrounding context (buildings, sky, road, foliage)
+- Ensure the entire output is a clean, seamless, photorealistic photograph with no artifacts
+
 The result must preserve enough building structure for 3D spatial reconstruction.`;
 }
 
 // ---------------------------------------------------------------------------
 // FLUX 2 Pro img2img call via Azure AI Foundry
-// Posts multipart/form-data directly to the model endpoint.
+// Sends JSON with base64-encoded image to the BFL-compatible endpoint.
 // ---------------------------------------------------------------------------
+
+
 async function fluxImg2Img(
   imageBuffer: ArrayBuffer,
   prompt: string,
 ): Promise<string> {
-  const form = new FormData();
-  form.append("prompt", prompt);
-  form.append("n", "1");
-  form.append("output_format", "b64_json");
-  form.append(
-    "image",
-    new Blob([imageBuffer], { type: "image/jpeg" }),
-    "image.jpg",
-  );
+  const imageBase64 = Buffer.from(imageBuffer).toString("base64");
 
+  const payload = {
+    prompt,
+    input_image: imageBase64,
+    n: 1,
+    model: "FLUX.2-pro",
+  };
+
+  const t0 = Date.now();
   const res = await fetch(AZURE_FLUX_ENDPOINT, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${AZURE_FLUX_API_KEY}`,
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${AZURE_FLUX_API_KEY}`,
     },
-    body: form,
+    body: JSON.stringify(payload),
   });
+  const elapsed = Date.now() - t0;
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    console.error(`[enhance] FLUX failed ${res.status} in ${elapsed}ms: ${body}`);
     throw new Error(`FLUX img2img failed (${res.status}): ${body}`);
   }
 
   const data = await res.json();
-  return data.data[0].b64_json as string;
+
+  // Azure AI Foundry may return the result in different shapes depending on
+  // the model wrapper. Try common response formats.
+  const b64 =
+    data.image ??                    // BFL native: { image: "<base64>" }
+    data.data?.[0]?.b64_json ??      // OpenAI-compat: { data: [{ b64_json }] }
+    data.result ??                   // Some wrappers use { result: "<base64>" }
+    null;
+
+  if (!b64 || typeof b64 !== "string") {
+    console.error(`[enhance] Unexpected response keys=[${Object.keys(data).join(", ")}]`);
+    throw new Error(`FLUX returned unexpected response: [${Object.keys(data).join(", ")}]`);
+  }
+
+  console.log(`[enhance] FLUX ok in ${elapsed}ms`);
+  return b64;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,34 +107,25 @@ async function fluxImg2Img(
 async function downloadImage(url: string): Promise<ArrayBuffer> {
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Failed to download image (${res.status}): ${url}`);
+    throw new Error(`Failed to download image (${res.status})`);
   }
   return res.arrayBuffer();
 }
 
 // ---------------------------------------------------------------------------
 // Process a single image: download → enhance → return data URI
-// Falls back to original URL on failure.
+// Throws on failure — no fallback.
 // ---------------------------------------------------------------------------
 async function processImage(
   image: { url: string; heading: number },
   prompt: string,
 ): Promise<EnhancedImage> {
-  try {
-    const imageBuffer = await downloadImage(image.url);
-    const enhancedBase64 = await fluxImg2Img(imageBuffer, prompt);
-    return {
-      url: `data:image/png;base64,${enhancedBase64}`,
-      heading: image.heading,
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error(
-      `[enhance-images] Failed to enhance image heading=${image.heading}: ${msg}`,
-    );
-    // Fallback: return the original Street View URL
-    return { url: image.url, heading: image.heading };
-  }
+  const imageBuffer = await downloadImage(image.url);
+  const enhancedBase64 = await fluxImg2Img(imageBuffer, prompt);
+  return {
+    url: `data:image/jpeg;base64,${enhancedBase64}`,
+    heading: image.heading,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +133,7 @@ async function processImage(
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
   if (!AZURE_FLUX_ENDPOINT || !AZURE_FLUX_API_KEY) {
+    console.error("[enhance] Missing AZURE_FLUX env vars");
     return NextResponse.json(
       { error: "AZURE_FLUX_ENDPOINT and AZURE_FLUX_API_KEY must be set" },
       { status: 500 },
@@ -145,12 +162,24 @@ export async function POST(request: NextRequest) {
   const enhancedPrompt = buildFirePrompt(prompt, buildingName);
 
   console.log(
-    `[enhance-images] Enhancing ${images.length} images for "${buildingName}"`,
+    `[enhance] ${images.length} images for "${buildingName}" — headings=[${images.map((i) => i.heading).join(", ")}]`,
   );
 
-  const enhanced = await Promise.all(
-    images.map((img) => processImage(img, enhancedPrompt)),
-  );
+  const t0 = Date.now();
 
-  return NextResponse.json({ images: enhanced });
+  try {
+    const enhanced = await Promise.all(
+      images.map((img) => processImage(img, enhancedPrompt)),
+    );
+
+    console.log(`[enhance] All ${enhanced.length} images done in ${Date.now() - t0}ms`);
+    return NextResponse.json({ images: enhanced });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[enhance] Failed after ${Date.now() - t0}ms: ${msg}`);
+    return NextResponse.json(
+      { error: `Image enhancement failed: ${msg}` },
+      { status: 502 },
+    );
+  }
 }

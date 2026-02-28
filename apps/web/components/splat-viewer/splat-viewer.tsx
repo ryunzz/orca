@@ -7,11 +7,13 @@ import { SplatScene } from "./splat-scene";
 
 interface SplatViewerProps {
   spzUrl: string;
+  alternateWorldId?: string;
 }
 
-export function SplatViewer({ spzUrl }: SplatViewerProps) {
+export function SplatViewer({ spzUrl, alternateWorldId }: SplatViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [transitioning, setTransitioning] = useState(false);
 
   const handleLoaded = useCallback(() => setLoading(false), []);
   const handleError = useCallback((err: Error) => {
@@ -28,13 +30,16 @@ export function SplatViewer({ spzUrl }: SplatViewerProps) {
         <Suspense fallback={null}>
           <SplatScene
             spzUrl={spzUrl}
+            alternateWorldId={alternateWorldId}
             onLoaded={handleLoaded}
             onError={handleError}
+            onTransitionStart={() => setTransitioning(true)}
+            onTransitionEnd={() => setTransitioning(false)}
           />
         </Suspense>
       </Canvas>
 
-      {loading && !error && (
+      {loading && !error && !transitioning && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80">
           <Loader2
             className="size-6 animate-spin"
@@ -56,6 +61,17 @@ export function SplatViewer({ spzUrl }: SplatViewerProps) {
           </span>
           <span className="max-w-md text-center text-[10px] text-muted-foreground">
             {error}
+          </span>
+        </div>
+      )}
+
+      {!loading && !error && alternateWorldId && (
+        <div className="pointer-events-none absolute bottom-4 right-4 flex items-center gap-1.5 rounded bg-black/50 px-2.5 py-1.5 backdrop-blur-sm">
+          <kbd className="rounded border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
+            Tab
+          </kbd>
+          <span className="text-[10px] uppercase tracking-[0.1em] text-white/50">
+            Compare view
           </span>
         </div>
       )}
