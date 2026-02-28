@@ -205,16 +205,49 @@ export interface GenerateWorldParams {
   images: { url: string; heading: number }[];
 }
 
+const DATA_URI_REGEX = /^data:image\/(\w+);base64,(.+)$/;
+
+// ---------------------------------------------------------------------------
+// SPZ quality selection
+// ---------------------------------------------------------------------------
+
+const SPZ_QUALITY_PREFERENCE = ["high", "medium", "low"] as const;
+
+export function selectSpzUrl(world: World): string | null {
+  const urls = world.assets?.splats?.spz_urls;
+  if (!urls) return null;
+
+  for (const quality of SPZ_QUALITY_PREFERENCE) {
+    if (urls[quality]) return urls[quality];
+  }
+
+  const values = Object.values(urls) as string[];
+  return values[0] ?? null;
+}
+
 export async function generateWorld(
   params: GenerateWorldParams
 ): Promise<GenerateWorldResponse> {
-  const multiImagePrompt = params.images.map((img) => ({
-    azimuth: img.heading,
-    content: {
-      source: "uri" as const,
-      uri: img.url,
-    },
-  }));
+  const multiImagePrompt = params.images.map((img) => {
+    const match = img.url.match(DATA_URI_REGEX);
+    if (match) {
+      return {
+        azimuth: img.heading,
+        content: {
+          source: "data_base64" as const,
+          extension: match[1],
+          data_base64: match[2],
+        },
+      };
+    }
+    return {
+      azimuth: img.heading,
+      content: {
+        source: "uri" as const,
+        uri: img.url,
+      },
+    };
+  });
 
   const res = await fetch(`${BASE_URL}/worlds:generate`, {
     method: "POST",
@@ -225,7 +258,7 @@ export async function generateWorld(
       world_prompt: {
         type: "multi-image",
         multi_image_prompt: multiImagePrompt,
-        reconstruct_images: false,
+        reconstruct_images: true,
         text_prompt: params.textPrompt,
       },
     }),

@@ -236,14 +236,11 @@
 @keyframes scenario-highlight {
   0% {
     filter: brightness(1) drop-shadow(0 0 0 transparent);
-    transform: scale(1);
   }
   30% {
     filter: brightness(1.6) drop-shadow(0 0 16px oklch(0.752 0.217 52.149 / 60%));
-    transform: scale(1.08);
   }
   100% {
     filter: brightness(1) drop-shadow(0 0 0 transparent);
-    transform: scale(1);
   }
 }

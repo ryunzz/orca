@@ -34,7 +34,7 @@ import {
 } from "@/lib/dashboard-constants";
 
 import { fetchBuildingStreetView } from "@/lib/street-view";
-import { enhanceImages } from "@/lib/image-enhance";
+import { STREETVIEW_HEADINGS } from "@/lib/dashboard-constants";
 import {
   generateWorld,
   listWorlds,
@@ -53,7 +53,6 @@ import {
   type SelectedBuilding,
 } from "./building-prompt-dialog";
 import { MapSearch } from "./map-search";
-import { createFireOverlay } from "@/lib/fire-overlay";
 
 // ---------------------------------------------------------------------------
 // Token
@@ -477,8 +476,6 @@ export function DashboardMap() {
   const claimedCoordsRef = useRef<Set<string>>(new Set());
   // Polling interval handle
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Active fire overlay layer IDs (keyed by coordinate)
-  const fireOverlayIdsRef = useRef<Set<string>>(new Set());
 
   // -----------------------------------------------------------------------
   // Reset building highlight
@@ -661,48 +658,71 @@ export function DashboardMap() {
     async (prompt: string) => {
       if (!selectedBuilding) return;
 
-      // Phase 1: Fetch street view images
+      console.log(`[dashboard] Pipeline started — "${selectedBuilding.name}"`);
+
+      // Phase 1: Fetch street view images and log URLs
       setStatusText("Fetching views...");
-      const result = await fetchBuildingStreetView(
-        selectedBuilding.coordinates,
-        selectedBuilding.name
-      );
-
-      const CARDINAL_HEADINGS = new Set([0, 90, 180, 270]);
-      const available = result.images.filter(
-        (i: { available: boolean; type: string; heading: number }) =>
-          i.available && i.type === "center" && CARDINAL_HEADINGS.has(i.heading)
-      );
-
-      if (available.length === 0) {
-        toast.error("No street view imagery available for this location");
+      let result;
+      try {
+        result = await fetchBuildingStreetView(
+          selectedBuilding.coordinates,
+          selectedBuilding.name
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        console.error(`[dashboard] Street view fetch failed: ${msg}`);
+        toast.error(`Failed to fetch street view images: ${msg}`);
         setStatusText("");
         handleClose();
         return;
+      }
+
+      // Log all 8 center Street View URLs for reference
+      const ALL_HEADINGS = new Set(STREETVIEW_HEADINGS as readonly number[]);
+      const centerImages = result.images.filter(
+        (i: { available: boolean; type: string; heading: number }) =>
+          i.type === "center" && ALL_HEADINGS.has(i.heading)
+      );
+      console.log("[dashboard] Street View URLs (8 headings):");
+      for (const img of centerImages) {
+        console.log(`  heading=${img.heading}° available=${img.available} → ${img.url}`);
       }
 
       const [lng, lat] = selectedBuilding.coordinates;
       const displayName = `${result.buildingName} (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 
       try {
-        // Phase 2: Enhance images with fire/smoke effects
-        setStatusText("Enhancing images...");
-        const enhanced = await enhanceImages({
-          images: available.map((img: { url: string; heading: number }) => ({
-            url: img.url,
-            heading: img.heading,
-          })),
-          prompt,
-          buildingName: result.buildingName,
-        });
+        // Phase 2: Load static images from /public/images/ and convert to data URIs
+        setStatusText("Loading images...");
+        const headingOrder = [0, 45, 90, 135, 180, 225, 270, 315];
 
-        // Phase 3: Send enhanced images to World Labs
+        const staticImages = await Promise.all(
+          headingOrder.map(async (heading, i) => {
+            const imgPath = `/images/UIUC_${i + 1}.png`;
+            const res = await fetch(imgPath);
+            if (!res.ok) {
+              throw new Error(`Static image not found: ${imgPath} (${res.status})`);
+            }
+            const blob = await res.blob();
+            const buffer = await blob.arrayBuffer();
+            const base64 = btoa(
+              new Uint8Array(buffer).reduce((s, b) => s + String.fromCharCode(b), ""),
+            );
+            const mimeType = blob.type || "image/png";
+            return { url: `data:${mimeType};base64,${base64}`, heading };
+          }),
+        );
+
+        console.log(`[dashboard] Loaded ${staticImages.length} static images as data URIs`);
+
+        // Phase 3: Send images to World Labs
         setStatusText("Creating 3D world...");
         const response = await generateWorld({
           displayName,
           textPrompt: prompt,
-          images: enhanced.images,
+          images: staticImages,
         });
+        console.log(`[dashboard] World created — op=${response.operation_id}`);
 
         // Save to localStorage
         const scenario: PendingScenario = {
@@ -722,14 +742,6 @@ export function DashboardMap() {
         // Add pending marker to the map
         if (mapRef.current) {
           addPendingMarker(mapRef.current, scenario);
-
-          // Add fire particle overlay on the building
-          const fireId = `fire-${coordKey(lat, lng)}`;
-          if (!mapRef.current.getLayer(fireId)) {
-            const fireLayer = createFireOverlay(fireId, [lng, lat]);
-            mapRef.current.addLayer(fireLayer);
-            fireOverlayIdsRef.current.add(fireId);
-          }
         }
 
         // Start polling if not already running
@@ -739,9 +751,10 @@ export function DashboardMap() {
         handleClose();
         toast.success(`Scenario is being created for ${result.buildingName}`);
       } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        console.error(`[dashboard] Pipeline failed: ${message}`);
         setStatusText("");
         handleClose();
-        const message = err instanceof Error ? err.message : "Unknown error";
         toast.error(`Scenario creation failed: ${message}`);
       }
     },
@@ -896,12 +909,13 @@ export function DashboardMap() {
           }
 
           if (markerEl) {
-            markerEl.style.animation = "none";
-            void markerEl.offsetHeight;
-            markerEl.style.animation = "scenario-highlight 1s ease-out forwards";
-            markerEl.addEventListener(
+            const el = markerEl;
+            el.style.animation = "none";
+            void el.offsetHeight;
+            el.style.animation = "scenario-highlight 1s ease-out forwards";
+            el.addEventListener(
               "animationend",
-              () => { markerEl.style.animation = ""; },
+              () => { el.style.animation = ""; },
               { once: true }
             );
           }
@@ -967,10 +981,6 @@ export function DashboardMap() {
         marker.remove();
       }
       pendingMarkersRef.current.clear();
-      for (const fireId of fireOverlayIdsRef.current) {
-        if (map.getLayer(fireId)) map.removeLayer(fireId);
-      }
-      fireOverlayIdsRef.current.clear();
       mapRef.current = null;
       map.remove();
     };
