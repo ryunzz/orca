@@ -25,7 +25,7 @@ ollama_image = (
     )
     .run_commands(
         "ollama serve & sleep 5 && ollama pull llama3.2-vision:11b; pkill ollama || true",
-        gpu="T4",
+        gpu="H100",
     )
 )
 
@@ -42,7 +42,7 @@ OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 
 @app.cls(
     image=ollama_image,
-    gpu="T4",
+    gpu="H100",
     scaledown_window=SCALEDOWN_WINDOW_SECONDS,
     timeout=600,
     max_containers=MAX_CONTAINERS,
