@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvacuationRoutingResult",
+  "description": "Output schema for Evacuation Route Team. Reads fire + structural data from Redis.",
+  "type": "object",
+  "required": ["civilian_routes", "firefighter_routes", "timestamp"],
+  "properties": {
+    "civilian_routes": {
+      "type": "array",
+      "description": "Recommended evacuation routes for civilians",
+      "items": {
+        "type": "object",
+        "required": ["route_id", "priority", "start_zone", "exit_point", "path", "safety_score"],
+        "properties": {
+          "route_id": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Route priority (1 = primary recommended route)"
+          },
+          "start_zone": {
+            "type": "string",
+            "description": "Starting zone for this route"
+          },
+          "exit_point": {
+            "type": "string",
+            "description": "Exit/egress point ID"
+          },
+          "path": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Ordered list of zones/waypoints from start to exit"
+          },
+          "safety_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Overall route safety (1 = safest)"
+          },
+          "estimated_time_seconds": {
+            "type": "integer",
+            "description": "Estimated evacuation time in seconds"
+          },
+          "distance_meters": {
+            "type": "number"
+          },
+          "hazards_along_route": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "zone_id": { "type": "string" },
+                "hazard_type": { "type": "string" },
+                "severity": {
+                  "type": "string",
+                  "enum": ["low", "moderate", "high"]
+                }
+              }
+            }
+          },
+          "accessibility": {
+            "type": "string",
+            "enum": ["full", "limited", "wheelchair_accessible"],
+            "description": "Accessibility level of this route"
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "Recommended max number of people for this route"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["open", "congested", "closing", "blocked"],
+            "description": "Current route status"
+          }
+        }
+      }
+    },
+    "firefighter_routes": {
+      "type": "array",
+      "description": "Recommended entry routes for firefighters",
+      "items": {
+        "type": "object",
+        "required": ["route_id", "entry_point", "target_zone", "path", "safety_score"],
+        "properties": {
+          "route_id": { "type": "string" },
+          "entry_point": {
+            "type": "string",
+            "description": "Entry point for firefighters"
+          },
+          "target_zone": {
+            "type": "string",
+            "description": "Target zone to reach (e.g., fire origin, rescue target)"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": ["fire_attack", "search_rescue", "ventilation", "support"],
+            "description": "Purpose of this entry route"
+          },
+          "path": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "safety_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "structural_risk": {
+            "type": "string",
+            "enum": ["low", "moderate", "high", "critical"],
+            "description": "Structural risk along route (from structural team)"
+          },
+          "fire_exposure": {
+            "type": "string",
+            "enum": ["none", "light", "moderate", "heavy"],
+            "description": "Expected fire exposure (from fire team)"
+          },
+          "equipment_required": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Required equipment for this route (e.g., 'SCBA', 'thermal_camera')"
+          },
+          "estimated_time_seconds": {
+            "type": "integer"
+          },
+          "retreat_path": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Emergency retreat path"
+          }
+        }
+      }
+    },
+    "exits": {
+      "type": "array",
+      "description": "Status of all exit points",
+      "items": {
+        "type": "object",
+        "required": ["exit_id", "status", "location"],
+        "properties": {
+          "exit_id": { "type": "string" },
+          "name": { "type": "string" },
+          "location": {
+            "type": "object",
+            "properties": {
+              "zone_id": { "type": "string" },
+              "coordinates": {
+                "type": "object",
+                "properties": {
+                  "x": { "type": "number" },
+                  "y": { "type": "number" }
+                }
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["open", "congested", "blocked", "fire_compromised"]
+          },
+          "capacity_per_minute": {
+            "type": "integer",
+            "description": "People per minute throughput"
+          }
+        }
+      }
+    },
+    "staging_areas": {
+      "type": "array",
+      "description": "Recommended staging areas for firefighters",
+      "items": {
+        "type": "object",
+        "properties": {
+          "area_id": { "type": "string" },
+          "location": { "type": "string" },
+          "purpose": {
+            "type": "string",
+            "enum": ["command", "triage", "equipment", "rehab"]
+          },
+          "safe": { "type": "boolean" }
+        }
+      }
+    },
+    "estimated_occupancy": {
+      "type": "object",
+      "description": "Estimated number of people needing evacuation",
+      "properties": {
+        "total": { "type": "integer" },
+        "by_zone": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "mobility_impaired": { "type": "integer" }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "fire_context_used": { "type": "boolean" },
+    "structural_context_used": { "type": "boolean" },
+    "frame_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
