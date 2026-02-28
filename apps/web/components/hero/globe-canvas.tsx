@@ -1,63 +1,48 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import createGlobe from "cobe";
 import { cn } from "@/lib/utils";
 import {
   GLOBE_CONFIG,
-  TARGET_LOCATION,
+  IDLE_SPIN_SPEED,
+  INITIAL_THETA,
   TARGET_PHI,
   TARGET_THETA,
-  IDLE_SPIN_SPEED,
-  easeInCubic,
-  easeOutCubic,
   normalizeAngleDelta,
+  easeInOutCubic,
 } from "@/lib/globe-constants";
-import type { GlobePhaseInfo } from "@/lib/globe-state-machine";
+import {
+  HERO_GLOBE_ROTATE_MS,
+  type GlobeTransitionState,
+} from "@/lib/transition-constants";
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
 interface GlobeCanvasProps {
   className?: string;
-  phaseInfo: GlobePhaseInfo;
+  /** Shared ref so the overlay can read current globe phi */
+  phiRef: React.RefObject<number>;
+  /** Shared transition state for exit animation (desktop only) */
+  transitionRef?: React.RefObject<GlobeTransitionState>;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function GlobeCanvas({ className, phaseInfo }: GlobeCanvasProps) {
+export function GlobeCanvas({ className, phiRef, transitionRef }: GlobeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const phaseRef = useRef(phaseInfo);
-  const phiRef = useRef(0);
-  const thetaRef = useRef(0.3);
-  const lockStartPhiRef = useRef(0);
-  const lockStartThetaRef = useRef(0);
-  const lockInitializedRef = useRef(false);
-
-  // Keep phase ref in sync
-  useEffect(() => {
-    phaseRef.current = phaseInfo;
-
-    // Capture starting angles when LOCK begins
-    if (phaseInfo.state === "LOCK" && !lockInitializedRef.current) {
-      lockStartPhiRef.current = phiRef.current;
-      lockStartThetaRef.current = thetaRef.current;
-      lockInitializedRef.current = true;
-    }
-
-    // Reset lock flag if we go back to IDLE
-    if (phaseInfo.state === "IDLE") {
-      lockInitializedRef.current = false;
-    }
-  }, [phaseInfo]);
+  const thetaRef = useRef(INITIAL_THETA);
+  const rotationStartRef = useRef<{
+    phi: number;
+    theta: number;
+    startedAt: number;
+  } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Compute actual DPR (capped)
     const dpr = Math.min(window.devicePixelRatio || 1, GLOBE_CONFIG.MAX_DPR);
-
-    // Use actual display size so cobe renders centered
     const displayWidth = canvas.offsetWidth || GLOBE_CONFIG.WIDTH;
     const displayHeight = canvas.offsetHeight || GLOBE_CONFIG.HEIGHT;
 
@@ -74,79 +59,65 @@ export function GlobeCanvas({ className, phaseInfo }: GlobeCanvasProps) {
       baseColor: [...GLOBE_CONFIG.BASE_COLOR],
       markerColor: [...GLOBE_CONFIG.MARKER_COLOR],
       glowColor: [...GLOBE_CONFIG.GLOW_COLOR],
-      markers: [
-        {
-          location: [TARGET_LOCATION.LAT, TARGET_LOCATION.LNG],
-          size: 0.08,
-        },
-      ],
+      markers: [],
       scale: 1,
       offset: [0, 0],
       onRender: (state) => {
-        // Keep render resolution synced with display size
         state.width = canvas.offsetWidth * dpr;
         state.height = canvas.offsetHeight * dpr;
 
-        const { state: phase, progress } = phaseRef.current;
+        const phase = transitionRef?.current?.phase ?? "idle";
 
-        switch (phase) {
-          case "IDLE": {
-            // Continuous rotation
-            phiRef.current += IDLE_SPIN_SPEED;
-            state.phi = phiRef.current;
-            state.theta = thetaRef.current;
-            state.scale = 1;
-            break;
+        if (phase === "idle") {
+          // Continuous idle spin
+          phiRef.current += IDLE_SPIN_SPEED;
+          state.phi = phiRef.current;
+          state.theta = thetaRef.current;
+        } else if (phase === "exiting" || phase === "zooming") {
+          // Snapshot rotation start values once
+          if (!rotationStartRef.current) {
+            rotationStartRef.current = {
+              phi: phiRef.current,
+              theta: thetaRef.current,
+              startedAt: transitionRef!.current.exitStartedAt,
+            };
           }
 
-          case "LOCK": {
-            // EaseOutCubic interpolation from current → target (shortest arc)
-            const t = easeOutCubic(progress);
-            const startPhi = lockStartPhiRef.current;
-            const startTheta = lockStartThetaRef.current;
+          const elapsed = Date.now() - rotationStartRef.current.startedAt;
+          const t = Math.min(elapsed / HERO_GLOBE_ROTATE_MS, 1);
+          const eased = easeInOutCubic(t);
 
-            const deltaPhi = normalizeAngleDelta(TARGET_PHI - startPhi);
-            const deltaTheta = TARGET_THETA - startTheta;
+          // Interpolate phi via shortest-arc
+          const startPhi = rotationStartRef.current.phi;
+          const deltaPhi = normalizeAngleDelta(TARGET_PHI - startPhi);
+          state.phi = startPhi + deltaPhi * eased;
+          phiRef.current = state.phi;
 
-            phiRef.current = startPhi + deltaPhi * t;
-            thetaRef.current = startTheta + deltaTheta * t;
+          // Interpolate theta toward target
+          const startTheta = rotationStartRef.current.theta;
+          const newTheta = startTheta + (TARGET_THETA - startTheta) * eased;
+          state.theta = newTheta;
 
-            state.phi = phiRef.current;
-            state.theta = thetaRef.current;
-            state.scale = 1;
-            break;
+          if (transitionRef?.current) {
+            transitionRef.current.theta = newTheta;
           }
-
-          case "SCOPE": {
-            // Hold at target, scale = 1
-            state.phi = TARGET_PHI;
-            state.theta = TARGET_THETA;
-            state.scale = 1;
-            break;
-          }
-
-          case "ZOOM": {
-            // Hold at target, scale ramps 1→6
-            state.phi = TARGET_PHI;
-            state.theta = TARGET_THETA;
-            state.scale = 1 + 5 * easeInCubic(progress);
-            break;
-          }
-
-          case "NAVIGATE": {
-            state.phi = TARGET_PHI;
-            state.theta = TARGET_THETA;
-            state.scale = 6;
-            break;
+        } else {
+          // done — hold final position
+          state.phi = phiRef.current;
+          state.theta = TARGET_THETA;
+          if (transitionRef?.current) {
+            transitionRef.current.theta = TARGET_THETA;
           }
         }
+
+        state.scale = 1;
       },
     });
 
     return () => {
       globe.destroy();
     };
-    // Intentionally run only on mount — phaseRef handles dynamic reads
+    // Intentionally run only on mount — phiRef handles dynamic reads
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

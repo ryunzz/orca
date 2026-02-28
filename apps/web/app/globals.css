@@ -136,6 +136,9 @@
   --annotation-line: oklch(0.7 0.1 250 / 50%);
   --annotation-bg: oklch(0.18 0.006 285 / 85%);
   --grid-line: oklch(1 0 0 / 4%);
+  --cmd-blue: oklch(0.65 0.15 250);
+  --cmd-blue-dim: oklch(0.65 0.15 250 / 15%);
+  --grid-line-major: oklch(1 0 0 / 7%);
 }
 
 @layer base {
@@ -147,17 +150,20 @@
   }
 }
 
-/* ─── Fire Theme Keyframes ─────────────────────────────────────────────── */
-@keyframes ticker-scroll {
-  0% {
-    transform: translateX(0);
-  }
+/* ─── Keyframes ───────────────────────────────────────────────────────── */
+@keyframes button-glow {
+  0%,
   100% {
-    transform: translateX(-50%);
+    box-shadow: 0 0 0 oklch(0.752 0.217 52.149 / 0%);
+  }
+  50% {
+    box-shadow:
+      0 0 20px oklch(0.752 0.217 52.149 / 25%),
+      0 0 40px oklch(0.752 0.217 52.149 / 8%);
   }
 }
 
-@keyframes pulse-ring {
+@keyframes alert-pulse {
   0%,
   100% {
     opacity: 0.4;
@@ -165,33 +171,26 @@
   }
   50% {
     opacity: 0.8;
-    transform: scale(1.8);
+    transform: scale(2);
   }
 }
 
-@keyframes scan-line {
+@keyframes arc-draw {
   0% {
-    transform: translateY(0);
+    stroke-dashoffset: var(--arc-length, 200);
   }
   100% {
-    transform: translateY(100%);
-  }
-}
-
-@keyframes dash {
-  0% {
     stroke-dashoffset: 0;
   }
-  100% {
-    stroke-dashoffset: -14;
-  }
 }
 
-@keyframes radar-sweep {
+@keyframes marker-pulse {
   0% {
-    transform: rotate(0deg);
+    transform: scale(1);
+    opacity: 0.6;
   }
   100% {
-    transform: rotate(360deg);
+    transform: scale(2.5);
+    opacity: 0;
   }
 }
