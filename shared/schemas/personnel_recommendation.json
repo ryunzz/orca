@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PersonnelRecommendation",
+  "description": "Output from the Personnel Recommendation agent team. Recommends deployment based on aggregate analysis from all other teams.",
+  "type": "object",
+  "required": ["firefighters", "trucks", "equipment", "eta_containment_min", "strategy", "timestamp"],
+  "properties": {
+    "firefighters": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Recommended number of firefighters to deploy"
+    },
+    "trucks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "count"],
+        "properties": {
+          "type": { "type": "string", "enum": ["engine", "ladder", "tanker", "rescue", "hazmat"] },
+          "count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "equipment": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["item", "quantity"],
+        "properties": {
+          "item": { "type": "string", "description": "e.g. 'SCBA', 'thermal_imaging_camera', 'halligan_tool', 'portable_ladder', 'hose_line'" },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "priority": { "type": "string", "enum": ["critical", "recommended", "optional"] }
+        }
+      }
+    },
+    "eta_containment_min": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Estimated time to fire containment in minutes"
+    },
+    "strategy": {
+      "type": "string",
+      "description": "High-level tactical strategy e.g. 'Offensive interior attack via north stairwell, ventilate roof, establish water supply from hydrant on Green St'"
+    },
+    "alarm_level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "NFPA alarm level. 1 = single engine, 2 = working fire, 3 = multiple alarm, 4-5 = major incident"
+    },
+    "staging_location": {
+      "type": "string",
+      "description": "Recommended staging area for incoming units"
+    },
+    "priority_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Ordered list of immediate actions e.g. ['Establish command', 'Deploy attack line to 2nd floor', 'Search and rescue floor 3']"
+    },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

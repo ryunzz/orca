@@ -8,4 +8,5 @@ dependencies = [
   "torch>=2.5.1",
   "modal>=0.64.0",
   "pillow>=10.4.0",
+  "anthropic>=0.52.0",
 ]

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvacuationRoutes",
+  "description": "Output from the Evacuation Route agent team. Computes safest paths for civilians and firefighters using fire severity and structural data.",
+  "type": "object",
+  "required": ["civilian_exits", "firefighter_entries", "risk_scores", "frame_id", "timestamp"],
+  "properties": {
+    "civilian_exits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["route_id", "path", "risk_level", "estimated_time_seconds"],
+        "properties": {
+          "route_id": { "type": "string" },
+          "path": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Ordered list of waypoints e.g. ['Room 204', 'Hallway B', 'Stairwell A', 'Exit North']"
+          },
+          "risk_level": { "type": "string", "enum": ["safe", "caution", "dangerous", "blocked"] },
+          "estimated_time_seconds": { "type": "integer", "description": "Estimated traversal time in seconds" },
+          "hazards": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Hazards along this route e.g. 'smoke in hallway B', 'fire near stairwell'"
+          },
+          "recommended": { "type": "boolean", "description": "Whether this is the recommended primary route" }
+        }
+      }
+    },
+    "firefighter_entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["route_id", "path", "risk_level", "objective"],
+        "properties": {
+          "route_id": { "type": "string" },
+          "path": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Ordered list of waypoints from entry to target"
+          },
+          "risk_level": { "type": "string", "enum": ["safe", "caution", "dangerous", "blocked"] },
+          "objective": { "type": "string", "description": "What this entry route targets e.g. 'fire source in Room 301'" },
+          "equipment_needed": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "e.g. 'SCBA', 'thermal imaging', 'halligan tool'"
+          },
+          "recommended": { "type": "boolean" }
+        }
+      }
+    },
+    "risk_scores": {
+      "type": "object",
+      "description": "Per-area risk assessment",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "fire_risk": { "type": "number", "minimum": 0, "maximum": 1 },
+          "structural_risk": { "type": "number", "minimum": 0, "maximum": 1 },
+          "smoke_risk": { "type": "number", "minimum": 0, "maximum": 1 },
+          "combined_risk": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "frame_id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}
