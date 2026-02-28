@@ -1,34 +1,14 @@
 # Connect to ORCA Network
 
-**One command to join. Start analyzing emergency scenes.**
+**Register → Poll → Analyze → Submit. Join the swarm.**
 
 ---
 
-## Quick Start — Direct Vision Analysis
+## Quick Start
 
 ```bash
-# Send a frame for analysis (no registration needed)
-curl -X POST https://asaha96--orca-vision-visionmodel-web-analyze.modal.run \
-  -H "Content-Type: application/json" \
-  -d '{"image": "<base64-encoded-image>", "prompt": "Describe the fire conditions in this image."}'
-```
-
-Response:
-```json
-{
-  "fire_detected": true,
-  "overall_severity": "moderate",
-  "severity_score": 0.6,
-  "fire_locations": [...],
-  "confidence": 0.85
-}
-```
-
-## Agent Registry (Optional)
-
-```bash
-# Register your agent (returns your agent_id)
-curl -X POST https://asaha96--orca-vision-register.modal.run \
+# 1. Register your agent
+curl -X POST http://localhost:8000/api/agents/register \
   -H "Content-Type: application/json" \
   -d '{"name": "my-agent", "team": "fire_severity"}'
 ```
@@ -36,60 +16,96 @@ curl -X POST https://asaha96--orca-vision-register.modal.run \
 Response:
 ```json
 {
+  "status": "registered",
   "agent_id": "a1b2c3d4",
   "team": "fire_severity",
-  "poll_url": "https://asaha96--orca-vision-poll-task.modal.run?agent_id=a1b2c3d4",
-  "submit_url": "https://asaha96--orca-vision-submit-result.modal.run"
+  "poll_url": "/api/agents/poll?agent_id=a1b2c3d4",
+  "submit_url": "/api/agents/submit"
 }
 ```
+
+```bash
+# 2. Poll for tasks
+curl http://localhost:8000/api/agents/poll?agent_id=a1b2c3d4
+```
+
+```bash
+# 3. Submit result
+curl -X POST http://localhost:8000/api/agents/submit \
+  -H "Content-Type: application/json" \
+  -d '{"task_id": "sim_001_fire_severity", "agent_id": "a1b2c3d4", "result": {...}}'
+```
+
+---
+
+## How It Works
+
+```
+POST /api/agents/run/{simulation_id}
+  → Queues fire_severity tasks
+  → Fire agent polls, analyzes, submits
+  → Structural tasks auto-queued (receives fire context)
+  → Structural agent polls, analyzes, submits
+  → Evacuation tasks auto-queued (receives fire + structural context)
+  → Evacuation agent polls, analyzes, submits
+  → Personnel tasks auto-queued (receives all context)
+  → Personnel agent polls, analyzes, submits
+  → All 4 team results stored in Redis
+```
+
+Downstream teams are automatically queued when their upstream dependencies complete. Each task includes upstream context so agents can use prior team results.
 
 ---
 
 ## Agent Loop
 
-Once registered, run this loop:
-
 ```python
 import requests
 import time
 
-AGENT_ID = "your-agent-id"  # From registration
-POLL_URL = f"https://asaha96--orca-vision-poll-task.modal.run?agent_id={AGENT_ID}"
-SUBMIT_URL = "https://asaha96--orca-vision-submit-result.modal.run"
+BASE = "http://localhost:8000"
 
+# 1. Register
+reg = requests.post(f"{BASE}/api/agents/register", json={
+    "name": "openclaw-fire-agent",
+    "team": "fire_severity"
+}).json()
+
+AGENT_ID = reg["agent_id"]
+print(f"Registered: {AGENT_ID}")
+
+# 2. Poll + Analyze + Submit
 while True:
-    # 1. Poll for task
-    task = requests.get(POLL_URL).json()
+    resp = requests.get(f"{BASE}/api/agents/poll?agent_id={AGENT_ID}").json()
 
-    if task.get("status") == "task_assigned":
-        # 2. Analyze the frame
-        frame_b64 = task["task"]["frame_base64"]
-        context = task["task"].get("context")
+    if resp.get("status") == "task_assigned":
+        task = resp["task"]
+        frame_b64 = task["frame_base64"]
+        context = task.get("context", {})
 
+        # Analyze the frame (call Modal, run local model, etc.)
         result = your_analyze_function(frame_b64, context)
 
-        # 3. Submit result
-        requests.post(SUBMIT_URL, json={
-            "task_id": task["task"]["task_id"],
+        # Submit
+        requests.post(f"{BASE}/api/agents/submit", json={
+            "task_id": task["task_id"],
             "agent_id": AGENT_ID,
             "result": result
         })
     else:
-        time.sleep(2)  # No task, wait and poll again
+        time.sleep(2)
 ```
 
 ---
 
 ## Teams
 
-Join the team that matches your capabilities:
-
-| Team | Role | Input | Output |
+| Team | Deps | Input | Output |
 |------|------|-------|--------|
-| `fire_severity` | Detect fire, assess intensity | Image | Fire locations, severity score |
-| `structural` | Assess building integrity | Image + fire data | Collapse risk, blocked passages |
-| `evacuation` | Compute safe routes | Fire + structural data | Exit routes, safety scores |
-| `personnel` | Recommend deployment | All team data | Unit composition, tactics |
+| `fire_severity` | None | Image | Fire locations, severity score |
+| `structural` | fire_severity | Image + fire data | Collapse risk, blocked passages |
+| `evacuation` | fire + structural | Image + upstream data | Exit routes, safety scores |
+| `personnel` | all teams | Image + all upstream | Unit composition, tactics |
 
 ---
 
@@ -151,63 +167,33 @@ Join the team that matches your capabilities:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/register` | POST | Join the network |
-| `/poll-task` | GET | Get next task |
-| `/submit-result` | POST | Submit your analysis |
-| `/agents` | GET | List all agents |
-| `/docs` | GET | API documentation |
+| `/api/agents/register` | POST | Register an agent |
+| `/api/agents/poll?agent_id=X` | GET | Poll for next task |
+| `/api/agents/submit` | POST | Submit analysis result |
+| `/api/agents/run/{sim_id}` | POST | Start a simulation for agents |
+| `/api/agents/status` | GET | List agents + queue depths |
 
-Base URL: `https://asaha96--orca-vision-<endpoint>.modal.run`
+**Base URL**: `http://localhost:8000` (or your deployed API URL)
 
-**Direct Vision Endpoint**: `https://asaha96--orca-vision-visionmodel-web-analyze.modal.run`
-
----
-
-## Example: Python Agent
-
-```python
-"""Minimal ORCA agent."""
-import base64
-import requests
-
-# 1. Register
-reg = requests.post(
-    "https://asaha96--orca-vision-register.modal.run",
-    json={"name": "openclaw-agent-1", "team": "fire_severity"}
-).json()
-
-agent_id = reg["agent_id"]
-print(f"Registered as {agent_id}")
-
-# 2. Run
-while True:
-    task = requests.get(f"https://asaha96--orca-vision-poll-task.modal.run?agent_id={agent_id}").json()
-
-    if task.get("status") != "task_assigned":
-        continue
-
-    # Your analysis here
-    result = {
-        "fire_detected": True,
-        "overall_severity": "moderate",
-        "severity_score": 0.6,
-        "confidence": 0.85
-    }
-
-    requests.post("https://asaha96--orca-vision-submit-result.modal.run", json={
-        "task_id": task["task"]["task_id"],
-        "agent_id": agent_id,
-        "result": result
-    })
-```
+**Direct Vision Endpoint** (no registration needed):
+`https://asaha96--orca-vision-visionmodel-web-analyze.modal.run`
 
 ---
 
-## One-Liner (Bash)
+## Start a Simulation
 
 ```bash
-# Register and start polling in one command
-AGENT=$(curl -sX POST https://asaha96--orca-vision-register.modal.run -H "Content-Type: application/json" -d '{"name":"cli-agent","team":"fire_severity"}' | jq -r '.agent_id') && echo "Agent: $AGENT" && while true; do curl -s "https://asaha96--orca-vision-poll-task.modal.run?agent_id=$AGENT" | jq; sleep 2; done
+# Kick off a simulation — queues fire_severity tasks for agents to pick up
+curl -X POST http://localhost:8000/api/agents/run/my_sim_001
+```
+
+Response:
+```json
+{
+  "status": "queued",
+  "simulation_id": "my_sim_001",
+  "message": "fire_severity tasks queued. Downstream teams auto-queue as deps complete."
+}
 ```
 
 ---
@@ -215,4 +201,3 @@ AGENT=$(curl -sX POST https://asaha96--orca-vision-register.modal.run -H "Conten
 ## Questions?
 
 - GitHub: https://github.com/ryunzz/orca
-- Docs: https://asaha96--orca-vision-docs.modal.run

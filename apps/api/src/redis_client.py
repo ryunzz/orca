@@ -209,6 +209,58 @@ class RedisClient:
             await self._pubsub.unsubscribe(channel)
 
     # ─────────────────────────────────────────────────────────────────
+    # OpenClaw Agent Registry & Task Queue
+    # ─────────────────────────────────────────────────────────────────
+
+    async def register_agent(self, agent_id: str, agent_data: dict[str, Any]) -> None:
+        """Register an OpenClaw agent."""
+        await self._client.hset("orca:agents", agent_id, json.dumps(agent_data))
+
+    async def get_agent(self, agent_id: str) -> dict[str, Any] | None:
+        """Get agent registration info."""
+        data = await self._client.hget("orca:agents", agent_id)
+        return json.loads(data) if data else None
+
+    async def list_agents(self) -> list[dict[str, Any]]:
+        """List all registered agents."""
+        agents = await self._client.hgetall("orca:agents")
+        return [json.loads(v) for v in agents.values()]
+
+    async def queue_task(self, team_type: str, task: dict[str, Any]) -> None:
+        """Push a task onto the queue for a team type."""
+        key = f"orca:tasks:{team_type}"
+        await self._client.rpush(key, json.dumps(task))
+
+    async def poll_task(self, team_type: str) -> dict[str, Any] | None:
+        """Pop the next task for a team type (FIFO)."""
+        key = f"orca:tasks:{team_type}"
+        data = await self._client.lpop(key)
+        return json.loads(data) if data else None
+
+    async def submit_task_result(
+        self, task_id: str, agent_id: str, result: dict[str, Any]
+    ) -> None:
+        """Store a completed task result."""
+        key = f"orca:result:{task_id}"
+        await self._client.set(
+            key,
+            json.dumps({"task_id": task_id, "agent_id": agent_id, "result": result}),
+            ex=3600,  # expire after 1 hour
+        )
+
+    async def get_task_result(self, task_id: str) -> dict[str, Any] | None:
+        """Get a completed task result."""
+        data = await self._client.get(f"orca:result:{task_id}")
+        return json.loads(data) if data else None
+
+    async def get_queue_lengths(self) -> dict[str, int]:
+        """Get the number of pending tasks per team."""
+        lengths = {}
+        for team in self.TEAM_TYPES:
+            lengths[team] = await self._client.llen(f"orca:tasks:{team}")
+        return lengths
+
+    # ─────────────────────────────────────────────────────────────────
     # Cleanup
     # ─────────────────────────────────────────────────────────────────
 
