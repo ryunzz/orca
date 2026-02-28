@@ -8,5 +8,6 @@ def build_environment(config: dict) -> dict:
     layout = generate_building_layout(seed=seed, size=int(config.get("size", 20)))
     return {
         "building": layout,
+        "rooms": layout["rooms"],
         "environment_type": config.get("environment_type", "burning_building"),
     }

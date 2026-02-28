@@ -178,7 +178,7 @@ def compute_evacuation_routes(
                 if r["name"].lower() in label.lower() or label.lower() in r["name"].lower():
                     fire_rooms.add(r["name"])
     if not fire_rooms:
-        fire_rooms = {"Room 201"}  # default for demo
+        fire_rooms = {"1302"}  # default: first-floor lecture hall
 
     # --- Civilian exit routes ---
     # Start from interior rooms, find paths to exits

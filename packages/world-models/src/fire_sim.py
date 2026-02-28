@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .building_gen import siebel_center_rooms
+
 
 @dataclass
 class FireState:
@@ -207,18 +209,5 @@ def build_spread_timeline(
 
 
 def _default_building_rooms() -> list[dict[str, Any]]:
-    """Default Siebel Center-like building layout for demo."""
-    return [
-        {"name": "Lobby", "adjacent": ["Hallway A", "Stairwell A"], "has_stairwell": False, "is_exterior": True},
-        {"name": "Hallway A", "adjacent": ["Lobby", "Room 101", "Room 102", "Hallway B"], "has_stairwell": False},
-        {"name": "Room 101", "adjacent": ["Hallway A"], "has_stairwell": False},
-        {"name": "Room 102", "adjacent": ["Hallway A"], "has_stairwell": False},
-        {"name": "Hallway B", "adjacent": ["Hallway A", "Room 201", "Room 202", "Stairwell A"], "has_stairwell": False},
-        {"name": "Room 201", "adjacent": ["Hallway B"], "has_stairwell": False},
-        {"name": "Room 202", "adjacent": ["Hallway B"], "has_stairwell": False},
-        {"name": "Stairwell A", "adjacent": ["Lobby", "Hallway B", "Floor 2 Landing"], "has_stairwell": True},
-        {"name": "Floor 2 Landing", "adjacent": ["Stairwell A", "Hallway C"], "has_stairwell": True},
-        {"name": "Hallway C", "adjacent": ["Floor 2 Landing", "Room 301", "Room 302"], "has_stairwell": False},
-        {"name": "Room 301", "adjacent": ["Hallway C"], "has_stairwell": False},
-        {"name": "Room 302", "adjacent": ["Hallway C"], "has_stairwell": False},
-    ]
+    """Siebel Center for Computer Science — real floor plan layout."""
+    return siebel_center_rooms()

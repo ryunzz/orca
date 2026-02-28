@@ -115,18 +115,103 @@ def apply_structural_data(graph: nx.DiGraph, structural_data: dict[str, Any]) ->
 
 
 def _default_rooms() -> list[dict[str, Any]]:
-    """Default Siebel Center building layout."""
-    return [
-        {"name": "Lobby", "adjacent": ["Hallway A", "Stairwell A"], "is_exterior": True},
-        {"name": "Hallway A", "adjacent": ["Lobby", "Room 101", "Room 102", "Hallway B"]},
-        {"name": "Room 101", "adjacent": ["Hallway A"]},
-        {"name": "Room 102", "adjacent": ["Hallway A"]},
-        {"name": "Hallway B", "adjacent": ["Hallway A", "Room 201", "Room 202", "Stairwell A"]},
-        {"name": "Room 201", "adjacent": ["Hallway B"]},
-        {"name": "Room 202", "adjacent": ["Hallway B"]},
-        {"name": "Stairwell A", "adjacent": ["Lobby", "Hallway B", "Floor 2 Landing"], "has_stairwell": True},
-        {"name": "Floor 2 Landing", "adjacent": ["Stairwell A", "Hallway C"], "has_stairwell": True},
-        {"name": "Hallway C", "adjacent": ["Floor 2 Landing", "Room 301", "Room 302"]},
-        {"name": "Room 301", "adjacent": ["Hallway C"]},
-        {"name": "Room 302", "adjacent": ["Hallway C"]},
-    ]
+    """Siebel Center for Computer Science — real floor plan layout.
+
+    L-shaped building, floors 1-4. Corridor spine per floor:
+    C{f}100 (west) → C{f}200 (south) → C{f}300 (central) → C{f}400 (angled) → C{f}500 (east)
+    Two stairwells per floor connecting vertically.
+    Three exterior exits on floor 1: Lobby, West_Exit, East_Exit.
+    """
+    rooms: list[dict[str, Any]] = []
+    floors = 4
+
+    def add(name: str, adjacent: list[str], **kw: Any) -> None:
+        rooms.append({
+            "name": name,
+            "adjacent": adjacent,
+            "has_stairwell": kw.get("has_stairwell", False),
+            "is_exterior": kw.get("is_exterior", False),
+        })
+
+    for f in range(1, floors + 1):
+        ground = f == 1
+
+        # West wing
+        add(f"C{f}100", [
+            f"Stairwell_NW_{f}", f"{f}111", f"{f}113",
+            f"{f}109", f"{f}104", f"C{f}200",
+        ])
+        add(f"{f}111", [f"C{f}100"])
+        add(f"{f}113", [f"C{f}100"])
+        add(f"{f}109", [f"C{f}100"])
+        add(f"{f}104", [f"C{f}100"])
+
+        nw_adj: list[str] = [f"C{f}100", f"{f}124"]
+        if f > 1:
+            nw_adj.append(f"Stairwell_NW_{f - 1}")
+        if f < floors:
+            nw_adj.append(f"Stairwell_NW_{f + 1}")
+        add(f"Stairwell_NW_{f}", nw_adj, has_stairwell=True, is_exterior=ground)
+        add(f"{f}124", [f"Stairwell_NW_{f}"])
+
+        # South wing
+        c200_adj = [
+            f"C{f}100", f"{f}210", f"{f}214",
+            f"{f}225", f"Elevator_{f}", f"C{f}300",
+        ]
+        if ground:
+            c200_adj.append("West_Exit")
+        add(f"C{f}200", c200_adj)
+        add(f"{f}210", [f"C{f}200"])
+        add(f"{f}214", [f"C{f}200"])
+        add(f"{f}225", [f"C{f}200"])
+        add(f"Elevator_{f}", [f"C{f}200"])
+
+        # Central section
+        c300_adj = [
+            f"C{f}200", f"{f}302", f"{f}304",
+            f"Stairwell_C_{f}", f"C{f}400",
+        ]
+        if ground:
+            c300_adj.append("Lobby")
+        add(f"C{f}300", c300_adj)
+        add(f"{f}302", [f"C{f}300"])
+        add(f"{f}304", [f"C{f}300"])
+
+        c_adj: list[str] = [f"C{f}300"]
+        if f > 1:
+            c_adj.append(f"Stairwell_C_{f - 1}")
+        if f < floors:
+            c_adj.append(f"Stairwell_C_{f + 1}")
+        add(f"Stairwell_C_{f}", c_adj, has_stairwell=True)
+
+        # East angled section
+        add(f"C{f}400", [f"C{f}300", f"{f}403", f"{f}405", f"C{f}500"])
+        add(f"{f}403", [f"C{f}400"])
+        add(f"{f}405", [f"C{f}400"])
+
+        # Far east wing
+        c500_adj: list[str] = [f"C{f}400", f"{f}521", f"{f}532"]
+        if ground:
+            c500_adj.extend(["East_Exit", "1500"])
+        add(f"C{f}500", c500_adj)
+        add(f"{f}521", [f"C{f}500"])
+        add(f"{f}532", [f"C{f}500"])
+
+    # Ground-floor exits and landmarks
+    add("Lobby", ["C1300"], is_exterior=True)
+    add("West_Exit", ["C1200"], is_exterior=True)
+    add("East_Exit", ["C1500"], is_exterior=True)
+    add("1500", ["C1500"])
+
+    # Ensure bidirectional adjacency
+    name_set = {r["name"] for r in rooms}
+    adj_map: dict[str, set[str]] = {r["name"]: set(r["adjacent"]) for r in rooms}
+    for room in rooms:
+        for adj in room["adjacent"]:
+            if adj in name_set:
+                adj_map[adj].add(room["name"])
+    for room in rooms:
+        room["adjacent"] = sorted(adj_map[room["name"]])
+
+    return rooms
