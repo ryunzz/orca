@@ -38,5 +38,12 @@ async def health() -> dict[str, str]:
 
 @app.on_event("startup")
 async def startup() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Database unavailable — running without persistence. "
+            "Analysis endpoints still work via /api/analysis/demo"
+        )
