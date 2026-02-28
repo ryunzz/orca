@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db import get_session
 from ..models.simulation import Simulation
 from ..models.telemetry import TelemetryEvent
+from ..models.analysis import AnalysisResult, SpreadPrediction
 from ..services.world_model import EnvironmentPayload, world_model_service
 
 router = APIRouter(prefix="/simulation", tags=["simulation"])
@@ -53,7 +54,7 @@ async def get_simulation(simulation_id: str, session: AsyncSession = Depends(get
         "environment_type": sim.environment_type,
         "status": sim.status,
         "world_model_config": sim.world_model_config,
-        "metadata": sim.metadata,
+        "metadata": sim.extra,
     }
 
 
@@ -75,4 +76,69 @@ async def get_simulation_telemetry(simulation_id: str, session: AsyncSession = D
             }
             for e in events
         ],
+    }
+
+
+@router.get("/{simulation_id}/export")
+async def export_simulation_data(simulation_id: str, session: AsyncSession = Depends(get_session)):
+    """Export all analysis results for a simulation as a structured dataset.
+
+    This is the 'sellable dataset' — what fire departments and AI labs would buy.
+    Returns all agent team results, spread predictions, and metadata.
+    """
+    sim_uuid = uuid.UUID(simulation_id)
+
+    # Get simulation info
+    sim_stmt = select(Simulation).where(Simulation.id == sim_uuid)
+    sim_result = await session.execute(sim_stmt)
+    sim = sim_result.scalar_one_or_none()
+    if not sim:
+        raise HTTPException(status_code=404, detail="simulation not found")
+
+    # Get all analysis results
+    analysis_stmt = select(AnalysisResult).where(AnalysisResult.simulation_id == sim_uuid)
+    analysis_result = await session.execute(analysis_stmt)
+    analyses = analysis_result.scalars().all()
+
+    # Get spread predictions
+    spread_stmt = select(SpreadPrediction).where(SpreadPrediction.simulation_id == sim_uuid)
+    spread_result = await session.execute(spread_stmt)
+    spreads = spread_result.scalars().all()
+
+    return {
+        "simulation": {
+            "id": str(sim.id),
+            "name": sim.name,
+            "environment_type": sim.environment_type,
+            "config": sim.world_model_config,
+        },
+        "analysis_results": [
+            {
+                "id": str(a.id),
+                "frame_id": a.frame_id,
+                "team_type": a.team_type,
+                "result": a.result,
+                "model_used": a.model_used,
+                "confidence": a.confidence,
+                "processing_time_ms": a.processing_time_ms,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in analyses
+        ],
+        "spread_predictions": [
+            {
+                "id": str(s.id),
+                "frame_id": s.frame_id,
+                "timeline": s.timeline,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+            }
+            for s in spreads
+        ],
+        "dataset_meta": {
+            "total_frames_analyzed": len(set(a.frame_id for a in analyses)),
+            "total_analysis_records": len(analyses),
+            "team_types_present": list(set(a.team_type for a in analyses)),
+            "export_format": "json",
+            "schema_version": "1.0",
+        },
     }

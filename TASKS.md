@@ -44,7 +44,7 @@
 
 ## Phase 2 (Hours 8-18) — Integration & Cross-Team Logic
 
-- [ ] **P2-C1** Integrate pipeline into Ryun's agent framework:
+- [x] **P2-C1** Integrate pipeline into Ryun's agent framework:
   - Each agent instance calls your classification function as its "brain"
   - Function signature: `analyze_frame(frame, team_type, context) -> dict`
   - `context` contains other teams' results from Redis (for cross-team logic)
@@ -58,7 +58,7 @@
   - Combine with floor layout extracted from frames
   - Compute safest civilian exit paths (avoid fire + compromised structure)
   - Compute safest firefighter entry paths (shortest safe route to fire source)
-- [ ] **P2-C4** Build structured dataset output:
+- [x] **P2-C4** Build structured dataset output:
   - Every agent run produces annotated record: frame ref, classifications, predictions, recommendations, metadata
   - Define SQLAlchemy model shape, share with Ryun for DB storage
   - This is the "sellable dataset" for the business model
