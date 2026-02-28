@@ -22,4 +22,4 @@ class RoutingRequest(Base):
     estimated_time_seconds: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
+    extra_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
