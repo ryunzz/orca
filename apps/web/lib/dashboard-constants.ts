@@ -1,4 +1,52 @@
 // ---------------------------------------------------------------------------
+// Dashboard types
+// ---------------------------------------------------------------------------
+export type SeverityLevel = "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
+
+export interface IncidentData {
+  severity: SeverityLevel;
+  fireStatus: string;
+  alarmLevel: number;
+  structuralIntegrity: number;
+  temperatures: {
+    roof: number;
+    interior: number;
+    exterior: number;
+  };
+}
+
+export interface FireTruck {
+  id: string;
+  type: string;
+  lat: number;
+  lng: number;
+  status: string;
+}
+
+// ---------------------------------------------------------------------------
+// Fallback data — used when backend has no results yet
+// ---------------------------------------------------------------------------
+export const INCIDENT_DATA: IncidentData = {
+  severity: "LOW",
+  fireStatus: "CONTAINED",
+  alarmLevel: 1,
+  structuralIntegrity: 80,
+  temperatures: { roof: 200, interior: 150, exterior: 80 },
+};
+
+export const FIRE_TRUCKS: FireTruck[] = [
+  { id: "E-01", type: "Engine", lat: 40.1142, lng: -88.2255, status: "ON SCENE" },
+  { id: "L-07", type: "Ladder", lat: 40.1135, lng: -88.2242, status: "EN ROUTE" },
+  { id: "R-03", type: "Rescue", lat: 40.1130, lng: -88.2260, status: "STAGING" },
+];
+
+export const HEAT_MAP_POINTS: [number, number, number][] = [
+  [40.1138, -88.2249, 0.8],
+  [40.1139, -88.2248, 0.6],
+  [40.1137, -88.2250, 0.5],
+];
+
+// ---------------------------------------------------------------------------
 // Coordinates — Siebel Center for Computer Science
 // ---------------------------------------------------------------------------
 export const INCIDENT_CENTER = {
