@@ -1,0 +1,10 @@
+[project]
+name = "world-gen-routing"
+version = "0.1.0"
+description = "Emergency vehicle routing tools"
+requires-python = ">=3.11"
+dependencies = [
+  "networkx>=3.4.2",
+  "numpy>=2.2.0",
+  "httpx>=0.28.1",
+]

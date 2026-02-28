@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Simulation",
+  "type": "object",
+  "required": ["name", "environment_type", "world_model_config"],
+  "properties": {
+    "name": { "type": "string" },
+    "environment_type": { "type": "string", "enum": ["burning_building", "collapse", "hazmat"] },
+    "world_model_config": { "type": "object" },
+    "status": { "type": "string" }
+  }
+}

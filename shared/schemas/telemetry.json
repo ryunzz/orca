@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TelemetryEvent",
+  "type": "object",
+  "required": ["simulation_id", "user_id", "position", "rotation", "timestamp_ms"],
+  "properties": {
+    "simulation_id": { "type": "string", "format": "uuid" },
+    "user_id": { "type": "string" },
+    "position": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "rotation": {
+      "type": "object",
+      "required": ["pitch", "yaw", "roll"],
+      "properties": {
+        "pitch": { "type": "number" },
+        "yaw": { "type": "number" },
+        "roll": { "type": "number" }
+      }
+    },
+    "action": { "type": "string" },
+    "timestamp_ms": { "type": "integer" }
+  }
+}

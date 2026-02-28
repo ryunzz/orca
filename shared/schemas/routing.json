@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RoutingRequest",
+  "type": "object",
+  "required": ["simulation_id", "origin", "destination", "vehicle_type"],
+  "properties": {
+    "simulation_id": { "type": "string", "format": "uuid" },
+    "origin": {
+      "type": "object",
+      "required": ["lat", "lng"],
+      "properties": {
+        "lat": { "type": "number" },
+        "lng": { "type": "number" }
+      }
+    },
+    "destination": {
+      "type": "object",
+      "required": ["lat", "lng"],
+      "properties": {
+        "lat": { "type": "number" },
+        "lng": { "type": "number" }
+      }
+    },
+    "vehicle_type": { "type": "string", "enum": ["ambulance", "fire_truck", "police"] }
+  }
+}

@@ -1,0 +1,11 @@
+[project]
+name = "world-gen-world-models"
+version = "0.1.0"
+description = "Emergency scenario world model components"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.2.0",
+  "torch>=2.5.1",
+  "modal>=0.64.0",
+  "pillow>=10.4.0",
+]

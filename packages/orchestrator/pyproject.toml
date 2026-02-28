@@ -1,0 +1,11 @@
+[project]
+name = "world-gen-orchestrator"
+version = "0.1.0"
+description = "OpenClaw orchestrator service"
+requires-python = ">=3.11"
+dependencies = [
+  "redis>=5.2.1",
+  "websockets>=14.2",
+  "httpx>=0.28.1",
+  "modal>=0.64.0",
+]
