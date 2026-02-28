@@ -62,7 +62,7 @@
   - Every agent run produces annotated record: frame ref, classifications, predictions, recommendations, metadata
   - Define SQLAlchemy model shape, share with Ryun for DB storage
   - This is the "sellable dataset" for the business model
-- [ ] **P2-C5** Validate all 4 agent types producing credible outputs for Siebel Center demo
+- [x] **P2-C5** Validate all 4 agent types producing credible outputs for Siebel Center demo
 
 ---
 
