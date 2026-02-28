@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
@@ -133,15 +133,12 @@ export function SplatScene({
   // Particle reveal state — only used for the primary initial load
   const [splatReady, setSplatReady] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [revealed, setRevealed] = useState(false);
 
   // When the GPU warmup delay elapses, surface the load to the parent so the
   // DOM loading overlay disappears at the same moment the particle fade begins.
   useEffect(() => {
     if (splatReady) onLoaded?.();
   }, [splatReady, onLoaded]);
-
-  const handleRevealComplete = useCallback(() => setRevealed(true), []);
 
   // Handle primary splat initialization
   useEffect(() => {
@@ -266,9 +263,10 @@ export function SplatScene({
         />
       )}
 
-      {/* Particle reveal — only on primary initial load; stops immediately on error */}
-      {!revealed && !hasError && activeSlot === "primary" && (
-        <SplatReveal isLoaded={splatReady} onComplete={handleRevealComplete} />
+      {/* Particle reveal — only on primary initial load; stays mounted after
+          completion (materials at opacity 0) to avoid a WebGL clear-frame flash */}
+      {!hasError && activeSlot === "primary" && (
+        <SplatReveal isLoaded={splatReady} onComplete={() => {}} />
       )}
 
       <OrbitControls
