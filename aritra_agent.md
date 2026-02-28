@@ -1,6 +1,6 @@
 # Aritra Agent Progress Log
 
-## Status: Phase 2 mostly complete (P2-C2 blocked on Krish's frames)
+## Status: ALL TASKS COMPLETE except P2-C2 (blocked on Krish's frames)
 
 ---
 
@@ -61,8 +61,26 @@
 - Added GET `/api/analysis/demo` endpoint (no image/API key needed)
 - Fixed cross-package import collision (api/src vs world-models/src) using importlib
 
+### 2026-02-28 ~04:45 — API Hardening, WebSocket Streaming
+- Fixed API startup to handle missing PostgreSQL gracefully
+- Added `greenlet` dependency for SQLAlchemy async
+- Added `/ws/analysis` WebSocket endpoint for real-time streaming:
+  - Client sends `{"frame_path": "demo"}` → server streams each team's status
+  - `fire_severity: running` → `fire_severity: complete` → `structural: running` → ...
+  - Final message contains all 4 teams + spread timeline
+  - Tested live: 9 messages streamed correctly
+- API now serves 21 routes total including REST + WebSocket endpoints
+
 ### Remaining:
 - **P2-C2** (tune on real frames) — BLOCKED on Krish's World Labs frames
+
+### API Endpoints for Frontend (Sajal):
+- `GET /health` — health check
+- `GET /api/analysis/demo?frame_id=X` — full demo analysis (no API key needed)
+- `POST /api/analysis/run` — run full 4-team pipeline on real frame
+- `POST /api/analysis/team` — run single team analysis
+- `WS /ws/analysis` — real-time streaming analysis (send `{"frame_path": "demo"}`)
+- `GET /api/simulation/{id}/export` — export structured dataset
 
 ### Files created/modified this session:
 - `packages/world-models/src/vision.py` (new + fallback integration)
