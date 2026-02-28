@@ -100,7 +100,7 @@ async def get_simulation(
         "environment_type": sim.environment_type,
         "status": redis_status or sim.status,
         "world_model_config": sim.world_model_config,
-        "metadata": sim.extra_data,
+        "metadata": sim.extra,
         "created_at": sim.created_at.isoformat() if sim.created_at else None,
         "teams": {
             team: {"status": status}
@@ -176,7 +176,7 @@ async def run_simulation(
                 sim_record = res.scalar_one_or_none()
                 if sim_record:
                     sim_record.status = "error"
-                    sim_record.extra_data = {**sim_record.extra_data, "error": str(e)}
+                    sim_record.extra = {**sim_record.extra, "error": str(e)}
                 await db_session.commit()
 
     background_tasks.add_task(run_pipeline)
@@ -272,7 +272,7 @@ async def export_simulation(
             }
             for ar in agent_results
         ],
-        "metadata": sim.extra_data,
+        "metadata": sim.extra,
     }
 
     if format == "csv":

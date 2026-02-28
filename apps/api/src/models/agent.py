@@ -20,4 +20,4 @@ class AgentNode(Base):
     compute_specs: Mapped[dict | None] = mapped_column(JSONB)
     connected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_heartbeat: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    extra_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
+    extra: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")

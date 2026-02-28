@@ -21,4 +21,4 @@ class TelemetryEvent(Base):
     action: Mapped[str | None] = mapped_column(String(50))
     timestamp_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    extra_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
+    extra: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")

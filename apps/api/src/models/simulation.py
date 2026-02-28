@@ -22,7 +22,7 @@ class Simulation(Base):
     status: Mapped[str] = mapped_column(String(30), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    extra_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
+    extra: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
 
     # Relationships
     agent_results: Mapped[list["AgentResult"]] = relationship("AgentResult", back_populates="simulation")
@@ -42,7 +42,7 @@ class AgentResult(Base):
     is_consensus: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    extra_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
+    extra: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
 
     # Relationships
     simulation: Mapped["Simulation"] = relationship("Simulation", back_populates="agent_results")
@@ -58,7 +58,7 @@ class Dataset(Base):
     data_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    extra_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
+    extra: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, server_default="{}")
 
     # Relationships
     simulation: Mapped["Simulation"] = relationship("Simulation", back_populates="datasets")

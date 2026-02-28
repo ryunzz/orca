@@ -1,24 +1,42 @@
+import type { Metadata } from "next";
+import { Geist, Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
-import type { ReactNode } from "react";
-import Link from "next/link";
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
+  weight: ["400", "500", "600", "700"],
+});
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "PyroSight — AI Fire Intelligence",
+  description:
+    "Real-time structural analysis and predictive fire intelligence for emergency first responders.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="en">
-      <body>
-        <div className="min-h-screen">
-          <header className="border-b border-slate-700 bg-surface/90 px-6 py-4">
-            <div className="mx-auto flex max-w-6xl items-center justify-between">
-              <h1 className="text-lg font-semibold">WorldGen Emergency</h1>
-              <nav className="flex gap-4 text-sm">
-                <Link href="/">Dashboard</Link>
-                <Link href="/simulation">Simulations</Link>
-                <Link href="/network">Agent Network</Link>
-              </nav>
-            </div>
-          </header>
-          <main className="mx-auto max-w-6xl p-6">{children}</main>
-        </div>
+    <html lang="en" className={`dark ${inter.variable} ${spaceGrotesk.variable}`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        {children}
       </body>
     </html>
   );

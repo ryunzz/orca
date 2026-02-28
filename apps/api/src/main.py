@@ -10,6 +10,7 @@ from .routers.telemetry import router as telemetry_router
 from .routers.agents import router as agents_router
 from .routers.routing import router as routing_router
 from .routers.payments import router as payments_router
+from .routers.analysis import router as analysis_router
 from .ws import ws_router
 from .db import Base, engine
 from .redis_client import redis_client
@@ -32,6 +33,7 @@ app.include_router(telemetry_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(routing_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
+app.include_router(analysis_router, prefix="/api")
 app.include_router(ws_router)
 
 
@@ -46,15 +48,20 @@ async def health() -> dict[str, str]:
 
 @app.on_event("startup")
 async def startup() -> None:
-    # Initialize database
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Initialize database (graceful if unavailable)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database connected successfully")
+    except Exception as e:
+        logger.warning(f"Database unavailable — running without persistence: {e}")
+
     # Initialize Redis connection
     try:
         await redis_client.connect()
         logger.info("Redis connected successfully")
     except Exception as e:
-        logger.error(f"Failed to connect to Redis: {e}")
+        logger.warning(f"Redis unavailable — running without real-time features: {e}")
 
 
 @app.on_event("shutdown")
