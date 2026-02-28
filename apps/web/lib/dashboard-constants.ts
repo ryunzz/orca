@@ -182,5 +182,5 @@ export const STREETVIEW_IMAGE_SIZE = "640x640" as const;
 export const STREETVIEW_FOV = 90;
 export const STREETVIEW_PITCH = 10;
 export const STREETVIEW_OFFSET_RADIUS_M = 50;
-export const STREETVIEW_HEADING_COUNT = 4;
-export const STREETVIEW_HEADINGS = [0, 90, 180, 270] as const;
+export const STREETVIEW_HEADING_COUNT = 8;
+export const STREETVIEW_HEADINGS = [0, 45, 90, 135, 180, 225, 270, 315] as const;

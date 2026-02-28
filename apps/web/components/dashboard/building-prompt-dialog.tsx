@@ -203,7 +203,7 @@ export function BuildingPromptDialog({
             {isLoading ? (
               <>
                 <Loader2 className="size-3 animate-spin" />
-                <span className="ml-1.5">Analyzing</span>
+                <span className="ml-1.5">Generating</span>
               </>
             ) : (
               "Submit"

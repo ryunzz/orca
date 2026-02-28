@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { toast } from "sonner";
 
 import {
   MAPBOX_STYLE,
@@ -34,6 +35,18 @@ import {
 
 import { fetchBuildingStreetView } from "@/lib/street-view";
 import {
+  generateWorld,
+  listWorlds,
+  getOperation,
+  parseWorldCoordinates,
+  coordKey,
+  loadPendingScenarios,
+  addPendingScenario,
+  removePendingScenario,
+  type ParsedWorldLocation,
+  type PendingScenario,
+} from "@/lib/worldlabs";
+import {
   BuildingPromptDialog,
   type SelectedBuilding,
 } from "./building-prompt-dialog";
@@ -45,8 +58,9 @@ import { MapSearch } from "./map-search";
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
 // ---------------------------------------------------------------------------
-// Simulation submit handler
+// Polling interval
 // ---------------------------------------------------------------------------
+const POLL_INTERVAL_MS = 2_000;
 
 // ---------------------------------------------------------------------------
 // Apply warm color overrides to dark-v11 base layers
@@ -58,19 +72,16 @@ function applyBaseMapOverrides(map: mapboxgl.Map) {
   for (const layer of layers) {
     const id = layer.id;
 
-    // Background
     if (layer.type === "background") {
       map.setPaintProperty(id, "background-color", BASE_MAP_OVERRIDES.background);
       continue;
     }
 
-    // Water fills
     if (id.includes("water") && layer.type === "fill") {
       map.setPaintProperty(id, "fill-color", BASE_MAP_OVERRIDES.water);
       continue;
     }
 
-    // Road lines — warm up with contrast tiers
     if (id.startsWith("road") && layer.type === "line") {
       if (id.includes("motorway") || id.includes("trunk")) {
         map.setPaintProperty(id, "line-color", BASE_MAP_OVERRIDES.roadHighway);
@@ -82,12 +93,360 @@ function applyBaseMapOverrides(map: mapboxgl.Map) {
       continue;
     }
 
-    // Land use fills (parks, commercial, etc.)
     if (id.startsWith("landuse") && layer.type === "fill") {
       map.setPaintProperty(id, "fill-color", BASE_MAP_OVERRIDES.landuse);
       continue;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Compute the centroid of a building polygon for a stable coordinate key
+// ---------------------------------------------------------------------------
+function computeBuildingCentroid(
+  feature: mapboxgl.GeoJSONFeature
+): [number, number] | null {
+  const geom = feature.geometry;
+  let ring: number[][] | undefined;
+
+  if (geom.type === "Polygon") {
+    ring = geom.coordinates[0] as number[][];
+  } else if (geom.type === "MultiPolygon") {
+    ring = geom.coordinates[0][0] as number[][];
+  }
+
+  if (!ring || ring.length === 0) return null;
+
+  let sumLng = 0;
+  let sumLat = 0;
+  for (const coord of ring) {
+    sumLng += coord[0];
+    sumLat += coord[1];
+  }
+
+  return [sumLng / ring.length, sumLat / ring.length];
+}
+
+// ---------------------------------------------------------------------------
+// Create a DOM element for a completed world marker
+// ---------------------------------------------------------------------------
+function createWorldMarkerElement(loc: ParsedWorldLocation): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "world-marker";
+  el.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    pointer-events: auto;
+    transform: translate(-50%, -100%);
+  `;
+
+  // --- Card container ---
+  const card = document.createElement("div");
+  card.style.cssText = `
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: oklch(0.16 0.01 45 / 88%);
+    border: 1px solid oklch(1 0 0 / 10%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow:
+      0 0 24px oklch(0.752 0.217 52.149 / 8%),
+      0 4px 16px oklch(0 0 0 / 35%);
+  `;
+
+  // Top accent gradient
+  const accent = document.createElement("div");
+  accent.style.cssText = `
+    position: absolute;
+    inset: 0;
+    top: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, oklch(0.752 0.217 52.149), oklch(0.82 0.19 84.429), transparent);
+    opacity: 0.8;
+  `;
+  card.appendChild(accent);
+
+  // Label row
+  const labelRow = document.createElement("div");
+  labelRow.style.cssText = `
+    padding: 8px 12px 4px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  `;
+
+  // Status dot (solid = completed)
+  const statusDot = document.createElement("div");
+  statusDot.style.cssText = `
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: oklch(0.792 0.209 151.711);
+    box-shadow: 0 0 6px oklch(0.792 0.209 151.711 / 60%);
+    flex-shrink: 0;
+  `;
+  labelRow.appendChild(statusDot);
+
+  const label = document.createElement("div");
+  label.style.cssText = `
+    font-family: var(--font-geist-mono, monospace);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: oklch(0.92 0 0);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+  `;
+  label.textContent = loc.label;
+  labelRow.appendChild(label);
+  card.appendChild(labelRow);
+
+  // Status text
+  const statusText = document.createElement("div");
+  statusText.style.cssText = `
+    font-family: var(--font-geist-mono, monospace);
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: oklch(0.792 0.209 151.711 / 80%);
+    padding: 0 12px 6px 23px;
+  `;
+  statusText.textContent = "Scenario Ready";
+  card.appendChild(statusText);
+
+  // View button
+  const btn = document.createElement("a");
+  btn.href = `/worlds/${loc.world.world_id}`;
+  btn.style.cssText = `
+    display: block;
+    font-family: var(--font-geist-mono, monospace);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    text-align: center;
+    color: oklch(0.752 0.217 52.149);
+    background: oklch(0.752 0.217 52.149 / 8%);
+    border-top: 1px solid oklch(1 0 0 / 6%);
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  `;
+  btn.textContent = "View Scenario";
+  btn.addEventListener("mouseenter", () => {
+    btn.style.background = "oklch(0.752 0.217 52.149 / 20%)";
+    btn.style.color = "oklch(0.82 0.19 84.429)";
+  });
+  btn.addEventListener("mouseleave", () => {
+    btn.style.background = "oklch(0.752 0.217 52.149 / 8%)";
+    btn.style.color = "oklch(0.752 0.217 52.149)";
+  });
+  card.appendChild(btn);
+
+  el.appendChild(card);
+
+  // --- Tether: gradient stem + glowing base ---
+  const stem = document.createElement("div");
+  stem.style.cssText = `
+    width: 1px;
+    height: 32px;
+    background: linear-gradient(to bottom, oklch(0.752 0.217 52.149 / 60%), oklch(0.752 0.217 52.149 / 10%));
+  `;
+  el.appendChild(stem);
+
+  // Base anchor container (holds dot + ping ring)
+  const baseAnchor = document.createElement("div");
+  baseAnchor.style.cssText = `
+    position: relative;
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+
+  // Ping ring
+  const pingRing = document.createElement("div");
+  pingRing.style.cssText = `
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid oklch(0.752 0.217 52.149 / 50%);
+    animation: scenario-ping 2.5s ease-out infinite;
+  `;
+  baseAnchor.appendChild(pingRing);
+
+  // Center dot
+  const dot = document.createElement("div");
+  dot.style.cssText = `
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: oklch(0.752 0.217 52.149);
+    box-shadow: 0 0 10px oklch(0.752 0.217 52.149 / 70%);
+  `;
+  baseAnchor.appendChild(dot);
+
+  el.appendChild(baseAnchor);
+
+  return el;
+}
+
+// ---------------------------------------------------------------------------
+// Create a DOM element for a pending (generating) scenario marker
+// ---------------------------------------------------------------------------
+function createPendingMarkerElement(scenario: PendingScenario): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "world-marker world-marker--pending";
+  el.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: auto;
+    transform: translate(-50%, -100%);
+  `;
+
+  // --- Card container ---
+  const card = document.createElement("div");
+  card.style.cssText = `
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: oklch(0.16 0.01 45 / 85%);
+    border: 1px solid oklch(1 0 0 / 8%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow:
+      0 0 20px oklch(0.82 0.19 84.429 / 6%),
+      0 4px 16px oklch(0 0 0 / 30%);
+  `;
+
+  // Top accent gradient (amber tones for pending)
+  const accent = document.createElement("div");
+  accent.style.cssText = `
+    position: absolute;
+    inset: 0;
+    top: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, oklch(0.82 0.19 84.429 / 60%), oklch(0.905 0.182 98.111 / 50%), transparent);
+    opacity: 0.7;
+  `;
+  card.appendChild(accent);
+
+  // Label row
+  const labelRow = document.createElement("div");
+  labelRow.style.cssText = `
+    padding: 8px 12px 4px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  `;
+
+  // Spinner (rotating ring)
+  const spinner = document.createElement("div");
+  spinner.style.cssText = `
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid oklch(0.82 0.19 84.429 / 20%);
+    border-top-color: oklch(0.82 0.19 84.429);
+    flex-shrink: 0;
+    animation: scenario-spin 0.8s linear infinite;
+  `;
+  labelRow.appendChild(spinner);
+
+  const label = document.createElement("div");
+  label.style.cssText = `
+    font-family: var(--font-geist-mono, monospace);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: oklch(0.78 0 0);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+  `;
+  label.textContent = scenario.buildingName;
+  labelRow.appendChild(label);
+  card.appendChild(labelRow);
+
+  // Status text with breathing animation
+  const statusText = document.createElement("div");
+  statusText.style.cssText = `
+    font-family: var(--font-geist-mono, monospace);
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: oklch(0.82 0.19 84.429 / 70%);
+    padding: 0 12px 8px 28px;
+    animation: scenario-breathe 2s ease-in-out infinite;
+  `;
+  statusText.textContent = "Generating Scenario...";
+  card.appendChild(statusText);
+
+  el.appendChild(card);
+
+  // --- Tether: dashed stem + pulsing base ---
+  const stem = document.createElement("div");
+  stem.style.cssText = `
+    width: 0;
+    height: 32px;
+    border-left: 1px dashed oklch(0.82 0.19 84.429 / 35%);
+  `;
+  el.appendChild(stem);
+
+  // Base anchor container
+  const baseAnchor = document.createElement("div");
+  baseAnchor.style.cssText = `
+    position: relative;
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+
+  // Ping ring (pulsing outward)
+  const pingRing = document.createElement("div");
+  pingRing.style.cssText = `
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid oklch(0.82 0.19 84.429 / 40%);
+    animation: scenario-ping 2s ease-out infinite;
+  `;
+  baseAnchor.appendChild(pingRing);
+
+  // Center dot with breathing glow
+  const dot = document.createElement("div");
+  dot.style.cssText = `
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: oklch(0.82 0.19 84.429);
+    box-shadow: 0 0 8px oklch(0.82 0.19 84.429 / 50%);
+    animation: scenario-breathe 2s ease-in-out infinite;
+  `;
+  baseAnchor.appendChild(dot);
+
+  el.appendChild(baseAnchor);
+
+  return el;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +459,15 @@ export function DashboardMap() {
     useState<SelectedBuilding | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const highlightedIdRef = useRef<string | number | null>(null);
+
+  // Markers for completed worlds
+  const worldMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  // Markers for pending scenarios (keyed by operationId)
+  const pendingMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  // Set of coordinate keys "lat,lng" that are claimed (completed + pending)
+  const claimedCoordsRef = useRef<Set<string>>(new Set());
+  // Polling interval handle
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // -----------------------------------------------------------------------
   // Reset building highlight
@@ -121,10 +489,165 @@ export function DashboardMap() {
   }, [resetHighlight]);
 
   // -----------------------------------------------------------------------
+  // Render completed world markers on the map
+  // -----------------------------------------------------------------------
+  const renderCompletedMarkers = useCallback(
+    (map: mapboxgl.Map, locations: ParsedWorldLocation[]) => {
+      // Remove old completed markers
+      for (const marker of worldMarkersRef.current) {
+        marker.remove();
+      }
+      worldMarkersRef.current = [];
+
+      for (const loc of locations) {
+        const el = createWorldMarkerElement(loc);
+        const marker = new mapboxgl.Marker({
+          element: el,
+          anchor: "bottom",
+          offset: [0, -40],
+        })
+          .setLngLat([loc.lng, loc.lat])
+          .addTo(map);
+
+        worldMarkersRef.current.push(marker);
+      }
+    },
+    []
+  );
+
+  // -----------------------------------------------------------------------
+  // Render a single pending marker on the map
+  // -----------------------------------------------------------------------
+  const addPendingMarker = useCallback(
+    (map: mapboxgl.Map, scenario: PendingScenario) => {
+      // Don't double-add
+      if (pendingMarkersRef.current.has(scenario.operationId)) return;
+
+      const el = createPendingMarkerElement(scenario);
+      const marker = new mapboxgl.Marker({
+        element: el,
+        anchor: "bottom",
+        offset: [0, -40],
+      })
+        .setLngLat([scenario.lng, scenario.lat])
+        .addTo(map);
+
+      pendingMarkersRef.current.set(scenario.operationId, marker);
+    },
+    []
+  );
+
+  // -----------------------------------------------------------------------
+  // Remove a pending marker
+  // -----------------------------------------------------------------------
+  const removePendingMarker = useCallback((operationId: string) => {
+    const marker = pendingMarkersRef.current.get(operationId);
+    if (marker) {
+      marker.remove();
+      pendingMarkersRef.current.delete(operationId);
+    }
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // Rebuild the claimed coordinates set from completed + pending
+  // -----------------------------------------------------------------------
+  const rebuildClaimedCoords = useCallback(
+    (completedLocations: ParsedWorldLocation[]) => {
+      const claimed = new Set<string>();
+
+      // Completed worlds
+      for (const loc of completedLocations) {
+        claimed.add(coordKey(loc.lat, loc.lng));
+      }
+
+      // Pending scenarios from localStorage
+      for (const scenario of loadPendingScenarios()) {
+        claimed.add(coordKey(scenario.lat, scenario.lng));
+      }
+
+      claimedCoordsRef.current = claimed;
+    },
+    []
+  );
+
+  // -----------------------------------------------------------------------
+  // Load completed worlds, render markers, rebuild claims
+  // -----------------------------------------------------------------------
+  const loadWorldMarkers = useCallback(
+    async (map: mapboxgl.Map) => {
+      try {
+        const response = await listWorlds();
+        const locations: ParsedWorldLocation[] = [];
+
+        for (const world of response.worlds) {
+          const parsed = parseWorldCoordinates(world);
+          if (parsed) locations.push(parsed);
+        }
+
+        renderCompletedMarkers(map, locations);
+        rebuildClaimedCoords(locations);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        console.warn(`[WorldLabs] Failed to load worlds: ${msg}`);
+      }
+    },
+    [renderCompletedMarkers, rebuildClaimedCoords]
+  );
+
+  // -----------------------------------------------------------------------
+  // Poll all pending scenarios — runs on an interval
+  // -----------------------------------------------------------------------
+  const pollPendingScenarios = useCallback(async () => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const pending = loadPendingScenarios();
+    if (pending.length === 0) return;
+
+    for (const scenario of pending) {
+      try {
+        const op = await getOperation(scenario.operationId);
+
+        if (!op.done) continue;
+
+        // Operation finished — remove from localStorage + pending marker
+        removePendingScenario(scenario.operationId);
+        removePendingMarker(scenario.operationId);
+
+        if (op.error) {
+          const errMsg = op.error.message ?? "Unknown error";
+          toast.error(`Scenario failed for ${scenario.buildingName}: ${errMsg}`);
+        } else {
+          toast.success(`Scenario ready for ${scenario.buildingName}`);
+          // Refresh completed markers to pick up the new world
+          await loadWorldMarkers(map);
+        }
+      } catch {
+        // Network error polling — leave it in localStorage for next tick
+      }
+    }
+  }, [removePendingMarker, loadWorldMarkers]);
+
+  // -----------------------------------------------------------------------
+  // Start/stop polling lifecycle
+  // -----------------------------------------------------------------------
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return;
+    pollIntervalRef.current = setInterval(pollPendingScenarios, POLL_INTERVAL_MS);
+  }, [pollPendingScenarios]);
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
+
+  // -----------------------------------------------------------------------
   // Submit handler
   // -----------------------------------------------------------------------
   const handlePromptSubmit = useCallback(
-    async (_prompt: string) => {
+    async (prompt: string) => {
       if (!selectedBuilding) return;
 
       const result = await fetchBuildingStreetView(
@@ -132,22 +655,63 @@ export function DashboardMap() {
         selectedBuilding.name
       );
 
-      const available = result.images.filter((i) => i.available);
-
-      console.log(`[Street View] Building: ${result.buildingName}`);
-      console.log(`[Street View] Coordinates: ${result.coordinates}`);
-      console.log(
-        `[Street View] Available images: ${available.length}/${result.images.length}`
+      const CARDINAL_HEADINGS = new Set([0, 90, 180, 270]);
+      const available = result.images.filter(
+        (i: { available: boolean; type: string; heading: number }) =>
+          i.available && i.type === "center" && CARDINAL_HEADINGS.has(i.heading)
       );
-      available.forEach((img, idx) => {
-        console.log(
-          `[Street View] Image ${idx + 1} (${img.type}, heading ${img.heading}°): ${img.url}`
-        );
-      });
 
-      handleClose();
+      if (available.length === 0) {
+        toast.error("No street view imagery available for this location");
+        handleClose();
+        return;
+      }
+
+      const [lng, lat] = selectedBuilding.coordinates;
+      const displayName = `${result.buildingName} (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+
+      try {
+        const response = await generateWorld({
+          displayName,
+          textPrompt: prompt,
+          images: available.map((img: { url: string; heading: number }) => ({
+            url: img.url,
+            heading: img.heading,
+          })),
+        });
+
+        // Save to localStorage
+        const scenario: PendingScenario = {
+          operationId: response.operation_id,
+          displayName,
+          buildingName: result.buildingName,
+          prompt,
+          lat,
+          lng,
+          createdAt: new Date().toISOString(),
+        };
+        addPendingScenario(scenario);
+
+        // Claim this coordinate immediately
+        claimedCoordsRef.current.add(coordKey(lat, lng));
+
+        // Add pending marker to the map
+        if (mapRef.current) {
+          addPendingMarker(mapRef.current, scenario);
+        }
+
+        // Start polling if not already running
+        startPolling();
+
+        handleClose();
+        toast.success(`Scenario is being created for ${result.buildingName}`);
+      } catch (err) {
+        handleClose();
+        const message = err instanceof Error ? err.message : "Unknown error";
+        toast.error(`Scenario creation failed: ${message}`);
+      }
     },
-    [handleClose, selectedBuilding]
+    [handleClose, selectedBuilding, addPendingMarker, startPolling]
   );
 
   // -----------------------------------------------------------------------
@@ -170,15 +734,12 @@ export function DashboardMap() {
 
     mapRef.current = map;
 
-    // Navigation control — bottom-right with pitch visualization
     map.addControl(
       new mapboxgl.NavigationControl({ visualizePitch: true }),
       "bottom-right"
     );
 
-    // ----- On style.load: add 3D buildings -----
     map.on("style.load", () => {
-      // Find the first symbol layer to insert buildings below labels
       const layers = map.getStyle().layers;
       let firstSymbolId: string | undefined;
       if (layers) {
@@ -232,29 +793,92 @@ export function DashboardMap() {
         firstSymbolId
       );
 
-      // 3D lighting — ambient + directional with shadows
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (map as any).setLights([AMBIENT_LIGHT, DIRECTIONAL_LIGHT]);
-
-      // Warm atmospheric fog — tints dark-v11 with warm undertones
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (map as any).setFog(MAP_FOG_CONFIG);
-
-      // Override dark-v11 base layer colors for warmer, more saturated look
       applyBaseMapOverrides(map);
 
       setMapReady(true);
+
+      // Load completed worlds
+      loadWorldMarkers(map);
+
+      // Restore pending scenario markers from localStorage and start polling
+      const pending = loadPendingScenarios();
+      if (pending.length > 0) {
+        for (const scenario of pending) {
+          addPendingMarker(map, scenario);
+        }
+        startPolling();
+      }
 
       // ----- Building click -----
       map.on("click", BUILDING_LAYER_ID, (e) => {
         if (!e.features || e.features.length === 0) return;
 
         const feature = e.features[0];
+
+        // Use polygon centroid for a stable key per building
+        const centroid = computeBuildingCentroid(feature);
+        const [cLng, cLat] = centroid ?? [e.lngLat.lng, e.lngLat.lat];
+        const key = coordKey(cLat, cLng);
+
+        // If this location already has a scenario, fly to it and highlight
+        if (claimedCoordsRef.current.has(key)) {
+          let markerEl: HTMLElement | null = null;
+          let markerLngLat: [number, number] | null = null;
+
+          // Check completed markers
+          for (const marker of worldMarkersRef.current) {
+            const ll = marker.getLngLat();
+            if (coordKey(ll.lat, ll.lng) === key) {
+              markerEl = marker.getElement();
+              markerLngLat = [ll.lng, ll.lat];
+              break;
+            }
+          }
+
+          // Check pending markers
+          if (!markerEl) {
+            for (const marker of pendingMarkersRef.current.values()) {
+              const ll = marker.getLngLat();
+              if (coordKey(ll.lat, ll.lng) === key) {
+                markerEl = marker.getElement();
+                markerLngLat = [ll.lng, ll.lat];
+                break;
+              }
+            }
+          }
+
+          // Fly to the marker and play highlight animation
+          if (markerLngLat) {
+            map.flyTo({
+              center: markerLngLat,
+              zoom: Math.max(map.getZoom(), 16.5),
+              duration: 800,
+              essential: true,
+            });
+          }
+
+          if (markerEl) {
+            markerEl.style.animation = "none";
+            void markerEl.offsetHeight;
+            markerEl.style.animation = "scenario-highlight 1s ease-out forwards";
+            markerEl.addEventListener(
+              "animationend",
+              () => { markerEl.style.animation = ""; },
+              { once: true }
+            );
+          }
+
+          return;
+        }
+
         const featureId = feature.id ?? feature.properties?.osm_id ?? null;
         const buildingName =
           feature.properties?.name || feature.properties?.type || "Building";
 
-        // Highlight clicked building using data-driven paint
         if (featureId != null) {
           map.setPaintProperty(BUILDING_LAYER_ID, "fill-extrusion-color", [
             "case",
@@ -267,7 +891,7 @@ export function DashboardMap() {
 
         setSelectedBuilding({
           name: buildingName,
-          coordinates: [e.lngLat.lng, e.lngLat.lat],
+          coordinates: [cLng, cLat],
           screenX: e.point.x,
           screenY: e.point.y,
         });
@@ -291,7 +915,6 @@ export function DashboardMap() {
         }
       });
 
-      // ----- Cursor changes on hover -----
       map.on("mouseenter", BUILDING_LAYER_ID, () => {
         map.getCanvas().style.cursor = "pointer";
       });
@@ -302,23 +925,31 @@ export function DashboardMap() {
     });
 
     return () => {
+      for (const marker of worldMarkersRef.current) {
+        marker.remove();
+      }
+      worldMarkersRef.current = [];
+      for (const marker of pendingMarkersRef.current.values()) {
+        marker.remove();
+      }
+      pendingMarkersRef.current.clear();
       mapRef.current = null;
       map.remove();
     };
-  }, []);
+  }, [loadWorldMarkers, addPendingMarker, startPolling]);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
-      {/* MapBox GL container — saturate + contrast boost to match fire theme */}
       <div ref={containerRef} className="map-canvas-boost h-full w-full" />
-
-      {/* Warm edge vignette */}
       <div className="map-warm-vignette" />
 
-      {/* Location search */}
       {mapReady && mapRef.current && <MapSearch map={mapRef.current} />}
 
-      {/* Floating prompt dialog */}
       <AnimatePresence>
         {selectedBuilding && (
           <BuildingPromptDialog

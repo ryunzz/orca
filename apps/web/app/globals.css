@@ -150,6 +150,23 @@
   }
 }
 
+/* ─── Toast states ────────────────────────────────────────────────────── */
+.toast-success {
+  border-left: 3px solid oklch(0.752 0.217 52.149) !important;
+  box-shadow:
+    0 4px 24px oklch(0 0 0 / 40%),
+    0 0 0 1px oklch(1 0 0 / 5%),
+    inset 0 0 20px oklch(0.752 0.217 52.149 / 4%) !important;
+}
+
+.toast-error {
+  border-left: 3px solid oklch(0.637 0.237 25.331) !important;
+  box-shadow:
+    0 4px 24px oklch(0 0 0 / 40%),
+    0 0 0 1px oklch(1 0 0 / 5%),
+    inset 0 0 20px oklch(0.637 0.237 25.331 / 5%) !important;
+}
+
 /* ─── Keyframes ───────────────────────────────────────────────────────── */
 @keyframes button-glow {
   0%,
@@ -192,5 +209,41 @@
   100% {
     transform: scale(2.5);
     opacity: 0;
+  }
+}
+
+@keyframes scenario-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+@keyframes scenario-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes scenario-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes scenario-highlight {
+  0% {
+    filter: brightness(1) drop-shadow(0 0 0 transparent);
+    transform: scale(1);
+  }
+  30% {
+    filter: brightness(1.6) drop-shadow(0 0 16px oklch(0.752 0.217 52.149 / 60%));
+    transform: scale(1.08);
+  }
+  100% {
+    filter: brightness(1) drop-shadow(0 0 0 transparent);
+    transform: scale(1);
   }
 }
