@@ -17,6 +17,7 @@ ollama_image = (
         add_python="3.11",
     )
     .apt_install("curl", "zstd")
+    .pip_install("fastapi[standard]")
     .run_commands(
         "curl -fsSL https://ollama.com/install.sh | sh",
     )
@@ -25,8 +26,6 @@ ollama_image = (
         gpu="T4",
     )
 )
-
-web_image = modal.Image.debian_slim(python_version="3.11").pip_install("fastapi[standard]")
 
 app = modal.App("orca-vision")
 
@@ -134,6 +133,20 @@ class VisionModel:
             raise ValueError(f"Ollama returned empty response. Keys: {list(body.keys())}, done: {body.get('done')}")
         return self._parse_json_response(raw)
 
+    @modal.fastapi_endpoint(method="POST")
+    def web_analyze(self, item: dict) -> dict:
+        """Public HTTP endpoint for vision analysis.
+
+        Runs directly on the GPU container — no double cold-start.
+        POST JSON: {"image": "<base64>", "prompt": "..."}
+        Returns: parsed JSON from the vision model.
+        """
+        image_data = item.get("image", "")
+        prompt = item.get("prompt", "")
+        if not image_data or not prompt:
+            return {"error": "Both 'image' (base64) and 'prompt' fields are required."}
+        return self.analyze(image_data, prompt)
+
     @staticmethod
     def _parse_json_response(raw: str) -> dict:
         """Parse JSON from model response, stripping markdown fences if present."""
@@ -148,25 +161,6 @@ class VisionModel:
         if start >= 0 and end > start:
             raw = raw[start:end]
         return json.loads(raw)
-
-
-@app.function(image=web_image, timeout=180)
-@modal.fastapi_endpoint(method="POST")
-def analyze_endpoint(item: dict) -> dict:
-    """Public HTTP endpoint for vision analysis.
-
-    POST JSON: {"image": "<base64>", "prompt": "..."}
-    Returns: parsed JSON from the vision model.
-
-    The endpoint itself is lightweight (no GPU) — it forwards the
-    request to VisionModel which runs on a T4 GPU container.
-    """
-    image_data = item.get("image", "")
-    prompt = item.get("prompt", "")
-    if not image_data or not prompt:
-        return {"error": "Both 'image' (base64) and 'prompt' fields are required."}
-    model = VisionModel()
-    return model.analyze.remote(image_data, prompt)
 
 
 @app.local_entrypoint()

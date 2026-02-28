@@ -9,7 +9,8 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Settings:
-    database_url: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://worldgen:worldgen@localhost:5432/worldgen").replace("postgresql://", "postgresql+asyncpg://")
+    supabase_url: str = os.getenv("SUPABASE_URL", "")
+    supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     modal_token_id: str | None = os.getenv("MODAL_TOKEN_ID")
     modal_token_secret: str | None = os.getenv("MODAL_TOKEN_SECRET")

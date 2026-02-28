@@ -4,11 +4,9 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from supabase import Client
 
-from ..db import get_session
-from ..models.payment import Payment
+from ..db import get_db
 from ..services.payment import payment_engine
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -20,25 +18,27 @@ class DistributeRequest(BaseModel):
 
 
 @router.post("/distribute")
-async def distribute(payload: DistributeRequest, session: AsyncSession = Depends(get_session)):
+async def distribute(payload: DistributeRequest, db: Client = Depends(get_db)):
     records = payment_engine.build_disbursement(payload.agent_node_ids, payload.amount_lamports)
-    for rec in records:
-        session.add(
-            Payment(
-                agent_node_id=uuid.UUID(rec["agent_node_id"]),
-                amount_lamports=rec["amount_lamports"],
-                status=rec["status"],
-            )
-        )
-    await session.commit()
+    rows = [
+        {
+            "id": str(uuid.uuid4()),
+            "agent_node_id": rec["agent_node_id"],
+            "amount_lamports": rec["amount_lamports"],
+            "status": rec["status"],
+            "metadata": {},
+        }
+        for rec in records
+    ]
+    if rows:
+        db.table("payments").insert(rows).execute()
     return {"dispatched": len(records)}
 
 
 @router.get("/status/{node_id}")
-async def status(node_id: str, session: AsyncSession = Depends(get_session)):
-    stmt = select(Payment).where(Payment.agent_node_id == uuid.UUID(node_id))
-    result = await session.execute(stmt)
-    payment = result.scalar_one_or_none()
-    if not payment:
+async def status(node_id: str, db: Client = Depends(get_db)):
+    result = db.table("payments").select("*").eq("agent_node_id", node_id).limit(1).execute()
+    if not result.data:
         raise HTTPException(status_code=404, detail="payment not found")
-    return {"status": payment.status, "tx_signature": payment.tx_signature}
+    payment = result.data[0]
+    return {"status": payment["status"], "tx_signature": payment.get("tx_signature")}

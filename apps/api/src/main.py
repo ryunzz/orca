@@ -12,7 +12,7 @@ from .routers.routing import router as routing_router
 from .routers.payments import router as payments_router
 from .routers.analysis import router as analysis_router
 from .ws import ws_router
-from .db import Base, engine
+from .db import supabase
 from .redis_client import redis_client
 
 logging.basicConfig(level=logging.INFO)
@@ -42,19 +42,22 @@ async def health() -> dict[str, str]:
     redis_ok = await redis_client.ping()
     return {
         "status": "ok",
-        "redis": "connected" if redis_ok else "disconnected"
+        "database": "connected" if supabase is not None else "disconnected",
+        "redis": "connected" if redis_ok else "disconnected",
     }
 
 
 @app.on_event("startup")
 async def startup() -> None:
-    # Initialize database (graceful if unavailable)
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database connected successfully")
-    except Exception as e:
-        logger.warning(f"Database unavailable — running without persistence: {e}")
+    # Verify Supabase connection
+    if supabase is not None:
+        try:
+            supabase.table("simulations").select("id").limit(1).execute()
+            logger.info("Supabase connected successfully")
+        except Exception as e:
+            logger.warning(f"Supabase unavailable — running without persistence: {e}")
+    else:
+        logger.warning("SUPABASE_URL not set — running without persistence")
 
     # Initialize Redis connection
     try:

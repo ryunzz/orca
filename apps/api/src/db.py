@@ -1,17 +1,26 @@
-from collections.abc import AsyncGenerator
+from __future__ import annotations
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import declarative_base
+import logging
+
+from supabase import create_client, Client
 
 from .config import get_settings
 
-DATABASE_URL = get_settings().database_url
+logger = logging.getLogger(__name__)
 
-engine = create_async_engine(DATABASE_URL, echo=False, future=True)
-AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
-Base = declarative_base()
+_settings = get_settings()
+
+supabase: Client | None = None
+
+if _settings.supabase_url and _settings.supabase_anon_key:
+    supabase = create_client(_settings.supabase_url, _settings.supabase_anon_key)
+    logger.info("Supabase client initialized")
+else:
+    logger.warning("SUPABASE_URL or SUPABASE_ANON_KEY not set — database features disabled")
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionLocal() as session:
-        yield session
+def get_db() -> Client:
+    """FastAPI dependency that provides the Supabase client."""
+    if supabase is None:
+        raise RuntimeError("Database not configured — set SUPABASE_URL and SUPABASE_ANON_KEY")
+    return supabase
