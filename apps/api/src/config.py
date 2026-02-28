@@ -19,7 +19,8 @@ class Settings:
     openclaw_api_key: str | None = os.getenv("OPENCLAW_API_KEY")
     world_model_api_key: str | None = os.getenv("WORLD_MODEL_API_KEY")
     world_model_endpoint: str | None = os.getenv("WORLD_MODEL_ENDPOINT")
-    # Inference mode: "local" (stubs), "cloud" (Modal/HTTP), "anthropic" (Claude Vision)
+    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
+    # Inference mode: "local" (stubs), "cloud" (Modal/HTTP), "anthropic" (Claude Vision), "openai" (GPT-4o-mini)
     inference_mode: str = os.getenv("ORCA_INFERENCE_MODE", "local")
 
 

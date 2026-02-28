@@ -83,6 +83,7 @@ class AgentInstance:
         - local: Returns stub data (fast, no external deps)
         - cloud: Calls Modal endpoint (global, scalable)
         - anthropic: Uses Claude Vision API
+        - openai: Uses OpenAI GPT-4o-mini Vision API
         """
         self.status = "analyzing_independent"
         settings = get_settings()
@@ -95,6 +96,10 @@ class AgentInstance:
         # Anthropic inference - call Claude Vision API
         if inference_mode == "anthropic":
             return await self._analyze_anthropic(frame_path)
+
+        # OpenAI inference - call GPT-4o-mini Vision API
+        if inference_mode == "openai":
+            return await self._analyze_openai(frame_path)
 
         # Local/stub inference (default)
         return await self._analyze_local(frame_path)
@@ -131,6 +136,23 @@ class AgentInstance:
             return result
         except Exception as e:
             logger.warning(f"Anthropic inference failed, falling back to local: {e}")
+            return await self._analyze_local(frame_path)
+
+    async def _analyze_openai(self, frame_path: str) -> dict[str, Any]:
+        """Call OpenAI GPT-4o-mini Vision API."""
+        try:
+            from .openai_inference import run_single_team_openai
+
+            result = await run_single_team_openai(
+                frame_path=frame_path,
+                team_type=self.team_type.value,
+                context=None,
+                frame_id=f"{self.instance_id}_{frame_path}",
+            )
+            result["inference_mode"] = "openai"
+            return result
+        except Exception as e:
+            logger.warning(f"OpenAI inference failed, falling back to local: {e}")
             return await self._analyze_local(frame_path)
 
     async def _analyze_local(self, frame_path: str) -> dict[str, Any]:
