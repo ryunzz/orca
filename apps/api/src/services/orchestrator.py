@@ -652,6 +652,33 @@ class Orchestrator:
     def __init__(self, instances_per_team: int = 3):
         self.instances_per_team = instances_per_team
         self.active_simulations: dict[str, dict] = {}
+        self._nodes: list[dict[str, Any]] = []
+        self._next_node_id: int = 1
+
+    @property
+    def active_nodes(self) -> list[dict[str, Any]]:
+        """Return list of active agent nodes."""
+        return [n for n in self._nodes if n["status"] == "active"]
+
+    def spawn_node(
+        self,
+        node_type: str,
+        wallet_address: str | None = None,
+        compute_specs: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create a tracked agent node and return its info."""
+        node = {
+            "node_id": f"node_{self._next_node_id}",
+            "node_type": node_type,
+            "status": "active",
+            "wallet_address": wallet_address,
+            "compute_specs": compute_specs or {},
+            "spawned_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._next_node_id += 1
+        self._nodes.append(node)
+        logger.info(f"Spawned agent node {node['node_id']} (type={node_type})")
+        return node
 
     async def run_simulation(
         self,

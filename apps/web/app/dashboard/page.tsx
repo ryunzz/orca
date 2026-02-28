@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { MAP_FADE_IN_DURATION_MS } from "@/lib/transition-constants";
 import { DashboardLoading } from "@/components/dashboard/dashboard-loading";
+import { AnalysisProvider } from "@/contexts/analysis-context";
 import "./dashboard.css";
 
 const DashboardMap = dynamic(
@@ -19,7 +20,7 @@ export default function DashboardPage() {
   const [showMap, setShowMap] = useState(false);
 
   return (
-    <>
+    <AnalysisProvider>
       {/* Always mount so mapbox initializes in parallel */}
       <motion.div
         className="h-screen w-screen"
@@ -32,6 +33,6 @@ export default function DashboardPage() {
 
       {/* Loading overlay — on top while map loads underneath */}
       {!showMap && <DashboardLoading onComplete={() => setShowMap(true)} />}
-    </>
+    </AnalysisProvider>
   );
 }

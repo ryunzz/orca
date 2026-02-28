@@ -46,6 +46,7 @@ import {
   type ParsedWorldLocation,
   type PendingScenario,
 } from "@/lib/worldlabs";
+import { useAnalysisContext } from "@/contexts/analysis-context";
 import {
   BuildingPromptDialog,
   type SelectedBuilding,
@@ -459,6 +460,11 @@ export function DashboardMap() {
     useState<SelectedBuilding | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const highlightedIdRef = useRef<string | number | null>(null);
+
+  // Analysis data from backend (auto-starts demo on connect).
+  // incidentData + analysisState drive dashboard panels when they're added.
+  const _analysis = useAnalysisContext();
+  void _analysis;
 
   // Markers for completed worlds
   const worldMarkersRef = useRef<mapboxgl.Marker[]>([]);
