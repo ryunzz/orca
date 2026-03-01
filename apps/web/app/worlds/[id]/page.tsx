@@ -5,10 +5,17 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { getWorld, selectSpzUrl, type World } from "@/lib/worldlabs";
+import { AnalysisProvider, useAnalysisContext } from "@/contexts/analysis-context";
+import type { MetricsSnapshot } from "@/lib/api-types";
 
 const ALTERNATE_WORLD_ID = "b2d84d7e-5bed-42e4-8e9a-3eef480fc2c4";
 
-const SplatViewer = dynamic<{ spzUrl: string; alternateWorldId?: string }>(
+const SplatViewer = dynamic<{
+  spzUrl: string;
+  alternateWorldId?: string;
+  metrics?: MetricsSnapshot | null;
+  analysisActive?: boolean;
+}>(
   () => import("@/components/splat-viewer/splat-viewer").then((m) => ({
     default: m.SplatViewer,
   })),
@@ -17,15 +24,18 @@ const SplatViewer = dynamic<{ spzUrl: string; alternateWorldId?: string }>(
 
 type Status = "loading" | "error" | "ready";
 
-export default function WorldPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
+// ---------------------------------------------------------------------------
+// Inner content — needs to be inside AnalysisProvider to use the context hook
+// ---------------------------------------------------------------------------
+
+function WorldContent({ id }: { id: string }) {
   const [world, setWorld] = useState<World | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState("");
+
+  const { analysisState } = useAnalysisContext();
+  const metrics = analysisState.metrics;
+  const analysisActive = analysisState.analyzing || metrics !== null;
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +60,7 @@ export default function WorldPage({
   const spzUrl = world ? selectSpzUrl(world) : null;
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-background font-mono">
+    <>
       {/* Top bar */}
       <div
         className="flex items-center gap-3 border-b px-4 py-3"
@@ -113,7 +123,12 @@ export default function WorldPage({
         )}
 
         {status === "ready" && world && spzUrl && (
-          <SplatViewer spzUrl={spzUrl} alternateWorldId={ALTERNATE_WORLD_ID} />
+          <SplatViewer
+            spzUrl={spzUrl}
+            alternateWorldId={ALTERNATE_WORLD_ID}
+            metrics={metrics}
+            analysisActive={analysisActive}
+          />
         )}
 
         {status === "ready" && world && !spzUrl && (
@@ -126,6 +141,26 @@ export default function WorldPage({
           />
         )}
       </div>
-    </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page — wraps content in AnalysisProvider for WebSocket metrics
+// ---------------------------------------------------------------------------
+
+export default function WorldPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+
+  return (
+    <AnalysisProvider>
+      <div className="flex h-screen w-screen flex-col bg-background font-mono">
+        <WorldContent id={id} />
+      </div>
+    </AnalysisProvider>
   );
 }

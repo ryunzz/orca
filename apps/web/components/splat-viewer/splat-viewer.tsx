@@ -1,25 +1,59 @@
 "use client";
 
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Loader2 } from "lucide-react";
 import { SplatScene } from "./splat-scene";
+import { AgentPathTracer } from "./agent-path-tracer";
+import { SceneMetricsOverlay } from "./scene-metrics-overlay";
+import type { MetricsSnapshot } from "@/lib/api-types";
 
 interface SplatViewerProps {
   spzUrl: string;
   alternateWorldId?: string;
+  metrics?: MetricsSnapshot | null;
+  analysisActive?: boolean;
 }
 
-export function SplatViewer({ spzUrl, alternateWorldId }: SplatViewerProps) {
+export function SplatViewer({
+  spzUrl,
+  alternateWorldId,
+  metrics = null,
+  analysisActive = false,
+}: SplatViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
+
+  // Agent traversal state
+  const [currentRoom, setCurrentRoom] = useState<string | null>(null);
+  const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
+  const [agentComplete, setAgentComplete] = useState(false);
 
   const handleLoaded = useCallback(() => setLoading(false), []);
   const handleError = useCallback((err: Error) => {
     setError(err.message);
     setLoading(false);
   }, []);
+
+  const handleRoomReached = useCallback((room: string, index: number) => {
+    setCurrentRoom(room);
+    setCurrentRoomIndex(index);
+  }, []);
+
+  const handleAgentComplete = useCallback(() => {
+    setAgentComplete(true);
+  }, []);
+
+  const pathRooms = metrics?.optimized_path.path ?? [];
+  const showAgent = !loading && !error && metrics && pathRooms.length >= 2;
+
+  // Compute progress percentage based on room index
+  const progress = useMemo(() => {
+    if (agentComplete) return 100;
+    if (pathRooms.length < 2) return 0;
+    return Math.round((currentRoomIndex / (pathRooms.length - 1)) * 100);
+  }, [agentComplete, currentRoomIndex, pathRooms.length]);
 
   return (
     <div className="relative h-full w-full">
@@ -37,7 +71,27 @@ export function SplatViewer({ spzUrl, alternateWorldId }: SplatViewerProps) {
             onTransitionEnd={() => setTransitioning(false)}
           />
         </Suspense>
+
+        {showAgent && (
+          <AgentPathTracer
+            path={pathRooms}
+            active={analysisActive}
+            speed={0.5}
+            onRoomReached={handleRoomReached}
+            onComplete={handleAgentComplete}
+          />
+        )}
       </Canvas>
+
+      {/* Metrics overlay — positioned over the Canvas */}
+      {showAgent && (
+        <SceneMetricsOverlay
+          metrics={metrics}
+          currentRoom={currentRoom}
+          progress={progress}
+          complete={agentComplete}
+        />
+      )}
 
       {loading && !error && !transitioning && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80">
