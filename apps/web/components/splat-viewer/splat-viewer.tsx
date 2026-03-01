@@ -56,7 +56,7 @@ export function SplatViewer({
   return (
     <div className="relative h-full w-full">
       <Canvas
-        gl={{ antialias: false }}
+        gl={{ antialias: false, alpha: true }}
         camera={{ position: [0, 0, -2], fov: 60, near: 0.1, far: 100 }}
       >
         <Suspense fallback={null}>
@@ -90,7 +90,7 @@ export function SplatViewer({
       )}
 
       {loading && !error && !transitioning && (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80">
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black">
           <Loader2
             className="size-6 animate-spin"
             style={{ color: "var(--fire-orange, oklch(0.752 0.217 52.149))" }}
