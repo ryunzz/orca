@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Loader2 } from "lucide-react";
 import { SplatScene } from "./splat-scene";
@@ -12,20 +12,21 @@ interface SplatViewerProps {
   spzUrl: string;
   alternateWorldId?: string;
   metrics?: MetricsSnapshot | null;
-  analysisActive?: boolean;
 }
 
 export function SplatViewer({
   spzUrl,
   alternateWorldId,
   metrics = null,
-  analysisActive = false,
 }: SplatViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
 
-  // Agent traversal state — driven by proximity detection
+  // Agent follows camera by default. Press N to toggle off.
+  const [agentActive, setAgentActive] = useState(true);
+
+  // Room proximity state
   const [currentRoom, setCurrentRoom] = useState<string | null>(null);
   const [roomsVisited, setRoomsVisited] = useState<Set<string>>(new Set());
 
@@ -45,9 +46,20 @@ export function SplatViewer({
     });
   }, []);
 
-  const showAgent = !loading && !error && metrics !== null;
+  // N key toggles agent following
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "n" || e.key === "N") {
+        setAgentActive((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
-  // Progress = fraction of rooms from the optimal path that the agent has been near
+  const sceneReady = !loading && !error;
+
+  // Progress based on rooms visited from the optimal path
   const pathRooms = metrics?.optimized_path.path ?? [];
   const visitedOnPath = pathRooms.filter((r) => roomsVisited.has(r)).length;
   const progress =
@@ -70,23 +82,46 @@ export function SplatViewer({
           />
         </Suspense>
 
-        {showAgent && (
+        {/* Agent always mounts when scene is ready — active toggles via N key */}
+        {sceneReady && (
           <AgentPathTracer
-            active={analysisActive}
+            active={agentActive}
             lagSeconds={1.5}
             onRoomReached={handleRoomReached}
           />
         )}
       </Canvas>
 
-      {/* Metrics overlay — positioned over the Canvas */}
-      {showAgent && (
+      {/* Metrics overlay — only when analysis data is available */}
+      {sceneReady && metrics && (
         <SceneMetricsOverlay
           metrics={metrics}
           currentRoom={currentRoom}
           progress={progress}
           complete={progress >= 100}
         />
+      )}
+
+      {/* Agent status hint */}
+      {sceneReady && (
+        <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-1.5 rounded bg-black/50 px-2.5 py-1.5 backdrop-blur-sm">
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: agentActive ? "#66d9ff" : "oklch(0.5 0 0)",
+              boxShadow: agentActive ? "0 0 6px #66d9ff" : "none",
+              flexShrink: 0,
+            }}
+          />
+          <kbd className="rounded border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
+            N
+          </kbd>
+          <span className="text-[10px] uppercase tracking-[0.1em] text-white/50">
+            {agentActive ? "Agent on" : "Agent off"}
+          </span>
+        </div>
       )}
 
       {loading && !error && !transitioning && (

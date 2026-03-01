@@ -14,7 +14,6 @@ const SplatViewer = dynamic<{
   spzUrl: string;
   alternateWorldId?: string;
   metrics?: MetricsSnapshot | null;
-  analysisActive?: boolean;
 }>(
   () => import("@/components/splat-viewer/splat-viewer").then((m) => ({
     default: m.SplatViewer,
@@ -35,7 +34,7 @@ function WorldContent({ id }: { id: string }) {
 
   const { analysisState } = useAnalysisContext();
   const metrics = analysisState.metrics;
-  const analysisActive = analysisState.analyzing || metrics !== null;
+
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +126,7 @@ function WorldContent({ id }: { id: string }) {
             spzUrl={spzUrl}
             alternateWorldId={ALTERNATE_WORLD_ID}
             metrics={metrics}
-            analysisActive={analysisActive}
+
           />
         )}
 

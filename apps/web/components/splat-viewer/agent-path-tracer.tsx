@@ -25,7 +25,6 @@ const TRAIL_COLOR = "#66d9ff";
 const GLOW_INTENSITY = 2;
 const GLOW_DISTANCE = 0.6;
 
-// Position history entry
 interface PosEntry {
   time: number;
   x: number;
@@ -33,8 +32,8 @@ interface PosEntry {
   z: number;
 }
 
-const MAX_HISTORY = 1200; // ~60s at 20 fps sampling
-const TRAIL_SAMPLE_INTERVAL = 0.05; // 50ms between trail point samples
+const MAX_HISTORY = 1200;
+const TRAIL_SAMPLE_INTERVAL = 0.05;
 const MAX_TRAIL_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
@@ -50,46 +49,44 @@ export function AgentPathTracer({
   const trailRef = useRef<THREE.BufferGeometry>(null);
   const lightRef = useRef<THREE.PointLight>(null);
 
-  // Ring buffer of camera positions over time
   const historyRef = useRef<PosEntry[]>([]);
-  // Flat array of trail XYZ coords the agent has drawn
   const trailCoordsRef = useRef<number[]>([]);
   const lastTrailTimeRef = useRef(0);
-  // Track which room we last fired a callback for
   const lastRoomRef = useRef<string | null>(null);
-  // Whether the agent has started moving (enough history accumulated)
-  const startedRef = useRef(false);
-
-  // Reusable vector for room proximity checks
   const _agentPos = useRef(new THREE.Vector3());
 
-  // Reset state when active toggles
+  // Reset trail + history when toggled off then back on
+  const prevActiveRef = useRef(active);
   useEffect(() => {
-    historyRef.current = [];
-    trailCoordsRef.current = [];
-    lastTrailTimeRef.current = 0;
-    lastRoomRef.current = null;
-    startedRef.current = false;
+    if (active && !prevActiveRef.current) {
+      // Re-activated — clear history so the lag starts fresh
+      historyRef.current = [];
+      trailCoordsRef.current = [];
+      lastTrailTimeRef.current = 0;
+      lastRoomRef.current = null;
 
-    if (trailRef.current) {
-      trailRef.current.setAttribute(
-        "position",
-        new THREE.BufferAttribute(new Float32Array(0), 3),
-      );
+      if (trailRef.current) {
+        trailRef.current.setAttribute(
+          "position",
+          new THREE.BufferAttribute(new Float32Array(0), 3),
+        );
+      }
     }
+    prevActiveRef.current = active;
   }, [active]);
 
-  // ---------------------------------------------------------------------------
-  // Frame loop
-  // ---------------------------------------------------------------------------
-
   useFrame(({ camera, clock }) => {
-    if (!active) return;
+    if (!active) {
+      // Hide agent when inactive
+      if (agentRef.current) agentRef.current.visible = false;
+      if (lightRef.current) lightRef.current.visible = false;
+      return;
+    }
 
     const now = clock.elapsedTime;
     const history = historyRef.current;
 
-    // 1. Record camera position
+    // 1. Record camera position every frame
     history.push({
       time: now,
       x: camera.position.x,
@@ -97,21 +94,17 @@ export function AgentPathTracer({
       z: camera.position.z,
     });
 
-    // Trim old entries beyond what we'd ever need
     while (history.length > MAX_HISTORY) {
       history.shift();
     }
 
-    // 2. Compute the target time (lagged)
+    // 2. Compute lagged target time
     const targetTime = now - lagSeconds;
 
-    // Not enough history accumulated yet
+    // Not enough history yet — keep agent hidden
     if (history.length === 0 || history[0].time > targetTime) return;
 
-    // 3. Find the lagged position via linear interpolation
-    let lx: number, ly: number, lz: number;
-
-    // Binary-ish scan from the end (most recent)
+    // 3. Binary search for the two bracketing entries
     let lo = 0;
     let hi = history.length - 1;
     while (lo < hi - 1) {
@@ -122,6 +115,7 @@ export function AgentPathTracer({
 
     const a = history[lo];
     const b = history[lo + 1];
+    let lx: number, ly: number, lz: number;
     if (b && b.time > a.time) {
       const t = (targetTime - a.time) / (b.time - a.time);
       lx = a.x + (b.x - a.x) * t;
@@ -133,35 +127,31 @@ export function AgentPathTracer({
       lz = a.z;
     }
 
-    // Mark started once we have a valid lagged position
-    if (!startedRef.current) startedRef.current = true;
-
-    // 4. Update agent mesh + light
+    // 4. Show + position agent
     if (agentRef.current) {
+      agentRef.current.visible = true;
       agentRef.current.position.set(lx, ly, lz);
     }
     if (lightRef.current) {
+      lightRef.current.visible = true;
       lightRef.current.position.set(lx, ly, lz);
     }
 
-    // 5. Sample trail points at a steady interval
+    // 5. Sample trail
     if (now - lastTrailTimeRef.current >= TRAIL_SAMPLE_INTERVAL) {
       lastTrailTimeRef.current = now;
 
       const coords = trailCoordsRef.current;
       coords.push(lx, ly, lz);
 
-      // Cap trail length
       while (coords.length > MAX_TRAIL_POINTS * 3) {
         coords.splice(0, 3);
       }
 
-      // Write to geometry
       if (trailRef.current && coords.length >= 6) {
-        const arr = new Float32Array(coords);
         trailRef.current.setAttribute(
           "position",
-          new THREE.BufferAttribute(arr, 3),
+          new THREE.BufferAttribute(new Float32Array(coords), 3),
         );
         trailRef.current.computeBoundingSphere();
       }
@@ -178,24 +168,22 @@ export function AgentPathTracer({
 
   return (
     <group>
-      {/* Progressive trail line */}
       <line>
         <bufferGeometry ref={trailRef} />
         <lineBasicMaterial color={TRAIL_COLOR} />
       </line>
 
-      {/* Agent dot — glowing sphere */}
-      <mesh ref={agentRef} visible={startedRef.current || false}>
+      <mesh ref={agentRef} visible={false}>
         <sphereGeometry args={[AGENT_RADIUS, 16, 16]} />
         <meshBasicMaterial color={AGENT_COLOR} toneMapped={false} />
       </mesh>
 
-      {/* Point light for glow effect */}
       <pointLight
         ref={lightRef}
         color={AGENT_COLOR}
         intensity={GLOW_INTENSITY}
         distance={GLOW_DISTANCE}
+        visible={false}
       />
     </group>
   );
