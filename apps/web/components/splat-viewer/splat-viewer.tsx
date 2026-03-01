@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Loader2 } from "lucide-react";
 import { SplatScene } from "./splat-scene";
@@ -25,10 +25,9 @@ export function SplatViewer({
   const [error, setError] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
 
-  // Agent traversal state
+  // Agent traversal state — driven by proximity detection
   const [currentRoom, setCurrentRoom] = useState<string | null>(null);
-  const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
-  const [agentComplete, setAgentComplete] = useState(false);
+  const [roomsVisited, setRoomsVisited] = useState<Set<string>>(new Set());
 
   const handleLoaded = useCallback(() => setLoading(false), []);
   const handleError = useCallback((err: Error) => {
@@ -36,24 +35,23 @@ export function SplatViewer({
     setLoading(false);
   }, []);
 
-  const handleRoomReached = useCallback((room: string, index: number) => {
+  const handleRoomReached = useCallback((room: string) => {
     setCurrentRoom(room);
-    setCurrentRoomIndex(index);
+    setRoomsVisited((prev) => {
+      if (prev.has(room)) return prev;
+      const next = new Set(prev);
+      next.add(room);
+      return next;
+    });
   }, []);
 
-  const handleAgentComplete = useCallback(() => {
-    setAgentComplete(true);
-  }, []);
+  const showAgent = !loading && !error && metrics !== null;
 
+  // Progress = fraction of rooms from the optimal path that the agent has been near
   const pathRooms = metrics?.optimized_path.path ?? [];
-  const showAgent = !loading && !error && metrics && pathRooms.length >= 2;
-
-  // Compute progress percentage based on room index
-  const progress = useMemo(() => {
-    if (agentComplete) return 100;
-    if (pathRooms.length < 2) return 0;
-    return Math.round((currentRoomIndex / (pathRooms.length - 1)) * 100);
-  }, [agentComplete, currentRoomIndex, pathRooms.length]);
+  const visitedOnPath = pathRooms.filter((r) => roomsVisited.has(r)).length;
+  const progress =
+    pathRooms.length > 0 ? Math.round((visitedOnPath / pathRooms.length) * 100) : 0;
 
   return (
     <div className="relative h-full w-full">
@@ -74,11 +72,9 @@ export function SplatViewer({
 
         {showAgent && (
           <AgentPathTracer
-            path={pathRooms}
             active={analysisActive}
-            speed={0.5}
+            lagSeconds={1.5}
             onRoomReached={handleRoomReached}
-            onComplete={handleAgentComplete}
           />
         )}
       </Canvas>
@@ -89,7 +85,7 @@ export function SplatViewer({
           metrics={metrics}
           currentRoom={currentRoom}
           progress={progress}
-          complete={agentComplete}
+          complete={progress >= 100}
         />
       )}
 
