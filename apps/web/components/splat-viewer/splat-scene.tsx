@@ -107,6 +107,7 @@ interface SplatSceneProps {
   onError?: (error: Error) => void;
   onTransitionStart?: () => void;
   onTransitionEnd?: () => void;
+  onSlotChange?: (slot: "primary" | "alternate") => void;
 }
 
 type AlternateFetchState = "idle" | "fetching" | "ready" | "error";
@@ -118,6 +119,7 @@ export function SplatScene({
   onError,
   onTransitionStart,
   onTransitionEnd,
+  onSlotChange,
 }: SplatSceneProps) {
   const gl = useThree((state) => state.gl);
   const primarySplatRef = useRef<SplatMesh>(null);
@@ -221,6 +223,7 @@ export function SplatScene({
             alternateFetchStateRef.current = "ready";
             setAlternateSpzUrl(url);
             setActiveSlot("alternate");
+            onSlotChange?.("alternate");
           })
           .catch((err) => {
             alternateFetchStateRef.current = "error";
@@ -235,7 +238,11 @@ export function SplatScene({
       if (alternateFetchStateRef.current !== "ready") return;
 
       onTransitionStart?.();
-      setActiveSlot((prev) => (prev === "primary" ? "alternate" : "primary"));
+      setActiveSlot((prev) => {
+        const next = prev === "primary" ? "alternate" : "primary";
+        onSlotChange?.(next);
+        return next;
+      });
     };
 
     window.addEventListener("keydown", onKeyDown);

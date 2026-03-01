@@ -1,11 +1,14 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Loader2 } from "lucide-react";
 import { SplatScene } from "./splat-scene";
-import { AgentPathTracer } from "./agent-path-tracer";
+import { AgentSquad } from "./agent-squad";
+import { AgentAlertOverlay, type ActiveAlert } from "./agent-alert-overlay";
+import { CoordinateRecorder } from "./coordinate-recorder";
 import { SceneMetricsOverlay } from "./scene-metrics-overlay";
+import { defaultScenario } from "@/data/agent-scenario";
 import type { MetricsSnapshot } from "@/lib/api-types";
 
 interface SplatViewerProps {
@@ -28,9 +31,16 @@ export function SplatViewer({
   const [agentActive, setAgentActive] = useState(false);
   const [hasClicked, setHasClicked] = useState(false);
 
+  // Which splat world is active (mirrored from SplatScene)
+  const [activeSlot, setActiveSlot] = useState<"primary" | "alternate">("primary");
+
   // Room proximity state
   const [currentRoom, setCurrentRoom] = useState<string | null>(null);
   const [roomsVisited, setRoomsVisited] = useState<Set<string>>(new Set());
+
+  // Alert state
+  const [activeAlerts, setActiveAlerts] = useState<ActiveAlert[]>([]);
+  const alertIdCounter = useRef(0);
 
   const handleLoaded = useCallback(() => setLoading(false), []);
   const handleError = useCallback((err: Error) => {
@@ -46,6 +56,30 @@ export function SplatViewer({
       next.add(room);
       return next;
     });
+  }, []);
+
+  const handleSlotChange = useCallback((slot: "primary" | "alternate") => {
+    setActiveSlot(slot);
+  }, []);
+
+  const handleAlert = useCallback(
+    (agentId: string, text: string, position: [number, number, number]) => {
+      const agent = defaultScenario.agents.find((a) => a.id === agentId);
+      const color = agent?.color ?? "#66d9ff";
+      const id = `alert-${alertIdCounter.current++}`;
+      setActiveAlerts((prev) => [
+        ...prev,
+        { id, agentId, text, color, position, createdAt: 0 },
+      ]);
+      // createdAt is set to 0 here — the AlertFlag component uses clock.elapsedTime
+      // on its first frame to calibrate. We pass 0 as a sentinel; the component
+      // handles it by snapping createdAt on mount.
+    },
+    [],
+  );
+
+  const handleAlertDismiss = useCallback((id: string) => {
+    setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
   // First click activates the agent
@@ -89,16 +123,31 @@ export function SplatViewer({
             onError={handleError}
             onTransitionStart={() => setTransitioning(true)}
             onTransitionEnd={() => setTransitioning(false)}
+            onSlotChange={handleSlotChange}
           />
         </Suspense>
 
-        {/* Agent always mounts when scene is ready — active toggles via N key */}
+        {/* Multi-agent squad — waypoint-driven */}
         {sceneReady && (
-          <AgentPathTracer
+          <AgentSquad
+            scenario={defaultScenario}
+            activePath={activeSlot}
             active={agentActive}
-            lagSeconds={1.5}
-            onRoomReached={handleRoomReached}
+            onAlert={handleAlert}
           />
+        )}
+
+        {/* 3D alert flags */}
+        {sceneReady && (
+          <AgentAlertOverlay
+            alerts={activeAlerts}
+            onDismiss={handleAlertDismiss}
+          />
+        )}
+
+        {/* Dev coordinate recorder — R key logs waypoint JSON */}
+        {sceneReady && process.env.NODE_ENV === "development" && (
+          <CoordinateRecorder />
         )}
       </Canvas>
 
@@ -112,31 +161,42 @@ export function SplatViewer({
         />
       )}
 
-      {/* Agent status hint */}
+      {/* Multi-agent legend */}
       {sceneReady && (
-        <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-1.5 rounded bg-black/50 px-2.5 py-1.5 backdrop-blur-sm">
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: agentActive ? "#66d9ff" : "oklch(0.5 0 0)",
-              boxShadow: agentActive ? "0 0 6px #66d9ff" : "none",
-              flexShrink: 0,
-            }}
-          />
+        <div className="pointer-events-none absolute bottom-4 left-4 flex flex-col gap-1.5 rounded bg-black/50 px-2.5 py-1.5 backdrop-blur-sm">
           {hasClicked ? (
             <>
-              <kbd className="rounded border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
-                N
-              </kbd>
-              <span className="text-[10px] uppercase tracking-[0.1em] text-white/50">
-                {agentActive ? "Agent on" : "Agent off"}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <kbd className="rounded border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
+                  N
+                </kbd>
+                <span className="text-[10px] uppercase tracking-[0.1em] text-white/50">
+                  {agentActive ? "Agents on" : "Agents off"}
+                </span>
+              </div>
+              {defaultScenario.agents.map((agent) => (
+                <div key={agent.id} className="flex items-center gap-1.5">
+                  <span
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: "50%",
+                      background: agentActive ? agent.color : "oklch(0.5 0 0)",
+                      boxShadow: agentActive
+                        ? `0 0 4px ${agent.color}`
+                        : "none",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-white/50">
+                    {agent.label}
+                  </span>
+                </div>
+              ))}
             </>
           ) : (
             <span className="text-[10px] uppercase tracking-[0.1em] text-white/50">
-              Click to start agent
+              Click to start agents
             </span>
           )}
         </div>
