@@ -34,12 +34,44 @@ export interface AnalysisErrorMessage {
   error: string;
 }
 
+// ---------------------------------------------------------------------------
+// Observability metrics
+// ---------------------------------------------------------------------------
+
+export interface OptimizedPathMetric {
+  path: string[];
+  total_cost: number;
+  risk_level: "safe" | "caution" | "dangerous" | "blocked";
+  room_count: number;
+  room_risks: Record<string, Record<string, number>>;
+}
+
+export interface SurvivabilityMetric {
+  minutes_remaining: number | null;
+  viable: boolean;
+  worst_room: string | null;
+  worst_room_intensity: number;
+}
+
+export interface HeatExposureMetric {
+  total_score: number;
+  classification: "minimal" | "moderate" | "severe" | "lethal";
+  per_room: Record<string, number>;
+}
+
+export interface MetricsSnapshot {
+  optimized_path: OptimizedPathMetric;
+  survivability: SurvivabilityMetric;
+  heat_exposure: HeatExposureMetric;
+}
+
 /** Shape of the full analysis payload from the backend. */
 export interface FullAnalysisResult {
   simulation_id: string;
   frame_id: string;
   teams: Record<TeamType, Record<string, unknown>>;
   spread_timeline: Record<string, unknown>[];
+  metrics?: MetricsSnapshot;
 }
 
 /** Per-team status tracked on the client side. */
@@ -54,6 +86,7 @@ export interface AnalysisState {
   analyzing: boolean;
   teams: Record<TeamType, TeamState>;
   fullResult: FullAnalysisResult | null;
+  metrics: MetricsSnapshot | null;
   error: string | null;
 }
 
@@ -67,6 +100,7 @@ export function initialAnalysisState(): AnalysisState {
     analyzing: false,
     teams,
     fullResult: null,
+    metrics: null,
     error: null,
   };
 }

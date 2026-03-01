@@ -11,6 +11,7 @@ from .routers.agents import router as agents_router
 from .routers.routing import router as routing_router
 from .routers.payments import router as payments_router
 from .routers.analysis import router as analysis_router
+from .routers.metrics import router as metrics_router
 from .ws import ws_router
 from .db import supabase
 from .redis_client import redis_client
@@ -34,6 +35,7 @@ app.include_router(agents_router, prefix="/api")
 app.include_router(routing_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
+app.include_router(metrics_router, prefix="/api")
 app.include_router(ws_router)
 
 

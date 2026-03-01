@@ -53,6 +53,7 @@ import {
   type SelectedBuilding,
 } from "./building-prompt-dialog";
 import { MapSearch } from "./map-search";
+import { MetricsPanel } from "./metrics-panel";
 
 // ---------------------------------------------------------------------------
 // Token
@@ -464,9 +465,7 @@ export function DashboardMap() {
   const highlightedIdRef = useRef<string | number | null>(null);
 
   // Analysis data from backend (auto-starts demo on connect).
-  // incidentData + analysisState drive dashboard panels when they're added.
-  const _analysis = useAnalysisContext();
-  void _analysis;
+  const { analysisState } = useAnalysisContext();
 
   // Markers for completed worlds
   const worldMarkersRef = useRef<mapboxgl.Marker[]>([]);
@@ -997,6 +996,8 @@ export function DashboardMap() {
       <div className="map-warm-vignette" />
 
       {mapReady && mapRef.current && <MapSearch map={mapRef.current} />}
+
+      <MetricsPanel metrics={analysisState.metrics} />
 
       <AnimatePresence>
         {selectedBuilding && (

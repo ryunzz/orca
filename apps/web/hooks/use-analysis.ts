@@ -25,7 +25,7 @@ export function useAnalysis() {
       for (const t of TEAM_ORDER) {
         teams[t] = { status: "pending", result: null };
       }
-      return { ...prev, teams, fullResult: null, error: null, analyzing: false };
+      return { ...prev, teams, fullResult: null, metrics: null, error: null, analyzing: false };
     });
   }, []);
 
@@ -50,12 +50,19 @@ export function useAnalysis() {
         return;
       }
 
+      // Metrics event (sent before final complete)
+      if (msg.event === "metrics") {
+        setState((prev) => ({ ...prev, metrics: msg.metrics }));
+        return;
+      }
+
       // Final complete
       if (msg.status === "complete" && msg.all_results) {
         setState((prev) => ({
           ...prev,
           analyzing: false,
           fullResult: msg.all_results,
+          metrics: msg.all_results.metrics ?? prev.metrics,
         }));
         return;
       }

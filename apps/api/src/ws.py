@@ -305,6 +305,13 @@ async def _stream_demo_analysis(ws: WebSocket, frame_id: str):
     # Spread timeline
     spread = build_spread_timeline(fire)
 
+    # Observability metrics (path, survivability, heat exposure)
+    from .services.metrics import compute_all_metrics
+    metrics_snapshot = compute_all_metrics(fire, structural)
+    metrics_dict = metrics_snapshot.to_dict()
+
+    await ws.send_text(json.dumps({"event": "metrics", "metrics": metrics_dict}))
+
     await ws.send_text(json.dumps({
         "status": "complete",
         "all_results": {
@@ -317,6 +324,7 @@ async def _stream_demo_analysis(ws: WebSocket, frame_id: str):
                 "personnel": personnel,
             },
             "spread_timeline": spread,
+            "metrics": metrics_dict,
         },
     }))
 
@@ -328,6 +336,18 @@ async def _stream_live_analysis(ws: WebSocket, sim_id: str, frame_path: str, fra
     try:
         await ws.send_text(json.dumps({"status": "running", "frame_id": frame_id}))
         result = await run_full_analysis(sim_id, frame_path, frame_id)
+
+        # Compute observability metrics from live analysis results
+        from .services.metrics import compute_all_metrics
+        teams = result.get("teams", {})
+        fire_data = teams.get("fire_severity")
+        structural_data = teams.get("structural")
+        if fire_data:
+            metrics_snapshot = compute_all_metrics(fire_data, structural_data)
+            metrics_dict = metrics_snapshot.to_dict()
+            await ws.send_text(json.dumps({"event": "metrics", "metrics": metrics_dict}))
+            result["metrics"] = metrics_dict
+
         await ws.send_text(json.dumps({"status": "complete", "all_results": result}))
     except Exception as exc:
         await ws.send_text(json.dumps({"status": "error", "error": str(exc)}))
