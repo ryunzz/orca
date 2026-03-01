@@ -34,7 +34,7 @@ interface PosEntry {
 
 const MAX_HISTORY = 1200;
 const TRAIL_SAMPLE_INTERVAL = 0.05;
-const MAX_TRAIL_POINTS = 2000;
+const TRAIL_LIFETIME = 3; // seconds — trail points older than this are dropped
 
 // ---------------------------------------------------------------------------
 // AgentPathTracer — follows the camera with a configurable lag
@@ -50,7 +50,8 @@ export function AgentPathTracer({
   const lightRef = useRef<THREE.PointLight>(null);
 
   const historyRef = useRef<PosEntry[]>([]);
-  const trailCoordsRef = useRef<number[]>([]);
+  // Trail stores timestamped points so old ones can expire
+  const trailRef2 = useRef<{ time: number; x: number; y: number; z: number }[]>([]);
   const lastTrailTimeRef = useRef(0);
   const lastRoomRef = useRef<string | null>(null);
   const _agentPos = useRef(new THREE.Vector3());
@@ -61,7 +62,7 @@ export function AgentPathTracer({
     if (active && !prevActiveRef.current) {
       // Re-activated — clear history so the lag starts fresh
       historyRef.current = [];
-      trailCoordsRef.current = [];
+      trailRef2.current = [];
       lastTrailTimeRef.current = 0;
       lastRoomRef.current = null;
 
@@ -137,23 +138,39 @@ export function AgentPathTracer({
       lightRef.current.position.set(lx, ly, lz);
     }
 
-    // 5. Sample trail
+    // 5. Sample trail + expire old points
+    const trail = trailRef2.current;
+
     if (now - lastTrailTimeRef.current >= TRAIL_SAMPLE_INTERVAL) {
       lastTrailTimeRef.current = now;
+      trail.push({ time: now, x: lx, y: ly, z: lz });
+    }
 
-      const coords = trailCoordsRef.current;
-      coords.push(lx, ly, lz);
+    // Drop points older than TRAIL_LIFETIME
+    const cutoff = now - TRAIL_LIFETIME;
+    while (trail.length > 0 && trail[0].time < cutoff) {
+      trail.shift();
+    }
 
-      while (coords.length > MAX_TRAIL_POINTS * 3) {
-        coords.splice(0, 3);
-      }
-
-      if (trailRef.current && coords.length >= 6) {
+    // Rebuild geometry from surviving points
+    if (trailRef.current) {
+      if (trail.length >= 2) {
+        const arr = new Float32Array(trail.length * 3);
+        for (let i = 0; i < trail.length; i++) {
+          arr[i * 3] = trail[i].x;
+          arr[i * 3 + 1] = trail[i].y;
+          arr[i * 3 + 2] = trail[i].z;
+        }
         trailRef.current.setAttribute(
           "position",
-          new THREE.BufferAttribute(new Float32Array(coords), 3),
+          new THREE.BufferAttribute(arr, 3),
         );
         trailRef.current.computeBoundingSphere();
+      } else {
+        trailRef.current.setAttribute(
+          "position",
+          new THREE.BufferAttribute(new Float32Array(0), 3),
+        );
       }
     }
 
