@@ -260,6 +260,29 @@ async def analysis_stream_ws(websocket: WebSocket):
         pass
 
 
+async def _emit_team_payment(ws: WebSocket, team: str) -> None:
+    """Trigger a micropayment for a completed agent team and stream the result."""
+    from .services.payment import TEAM_WEIGHTS, LAMPORTS_PER_SIMULATION, payment_engine
+
+    amount = int(LAMPORTS_PER_SIMULATION * TEAM_WEIGHTS.get(team, 0.25))
+    try:
+        record = await payment_engine.pay_team(team, amount)
+        await ws.send_text(
+            json.dumps(
+                {
+                    "event": "payment",
+                    "team": team,
+                    "recipient": record["recipient"],
+                    "amount_lamports": record["amount_lamports"],
+                    "tx_signature": record["tx_signature"],
+                    "status": record["status"],
+                }
+            )
+        )
+    except Exception as exc:
+        logger.warning("Payment failed for team %s: %s", team, exc)
+
+
 async def _stream_demo_analysis(ws: WebSocket, frame_id: str):
     """Stream pre-computed demo results with simulated delays."""
     from .services.analysis import _load_wm_module
@@ -280,18 +303,21 @@ async def _stream_demo_analysis(ws: WebSocket, frame_id: str):
     await asyncio.sleep(0.5)
     fire = get_fallback_fire_severity(frame_id)
     await ws.send_text(json.dumps({"team": "fire_severity", "status": "complete", "result": fire}))
+    await _emit_team_payment(ws, "fire_severity")
 
     # Structural
     await ws.send_text(json.dumps({"team": "structural", "status": "running"}))
     await asyncio.sleep(0.5)
     structural = get_fallback_structural(frame_id)
     await ws.send_text(json.dumps({"team": "structural", "status": "complete", "result": structural}))
+    await _emit_team_payment(ws, "structural")
 
     # Evacuation
     await ws.send_text(json.dumps({"team": "evacuation", "status": "running"}))
     await asyncio.sleep(0.3)
     evac = compute_evacuation_routes(fire, structural, frame_id)
     await ws.send_text(json.dumps({"team": "evacuation", "status": "complete", "result": evac}))
+    await _emit_team_payment(ws, "evacuation")
 
     # Personnel
     await ws.send_text(json.dumps({"team": "personnel", "status": "running"}))
@@ -301,6 +327,7 @@ async def _stream_demo_analysis(ws: WebSocket, frame_id: str):
         frame_id,
     )
     await ws.send_text(json.dumps({"team": "personnel", "status": "complete", "result": personnel}))
+    await _emit_team_payment(ws, "personnel")
 
     # Spread timeline
     spread = build_spread_timeline(fire)
@@ -347,6 +374,10 @@ async def _stream_live_analysis(ws: WebSocket, sim_id: str, frame_path: str, fra
             metrics_dict = metrics_snapshot.to_dict()
             await ws.send_text(json.dumps({"event": "metrics", "metrics": metrics_dict}))
             result["metrics"] = metrics_dict
+
+        # Distribute micropayments to all agent teams
+        for team in ["fire_severity", "structural", "evacuation", "personnel"]:
+            await _emit_team_payment(ws, team)
 
         await ws.send_text(json.dumps({"status": "complete", "all_results": result}))
     except Exception as exc:

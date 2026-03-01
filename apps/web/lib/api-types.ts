@@ -80,6 +80,20 @@ export interface TeamState {
   result: Record<string, unknown> | null;
 }
 
+// ---------------------------------------------------------------------------
+// Solana micropayments
+// ---------------------------------------------------------------------------
+
+/** Sent by backend when an agent team receives a SOL micropayment. */
+export interface PaymentRecord {
+  team: TeamType;
+  recipient: string;
+  amount_lamports: number;
+  tx_signature: string;
+  status: "submitted" | "confirmed" | "failed";
+  timestamp: number;
+}
+
 /** Top-level state managed by the useAnalysis hook. */
 export interface AnalysisState {
   connected: boolean;
@@ -87,6 +101,7 @@ export interface AnalysisState {
   teams: Record<TeamType, TeamState>;
   fullResult: FullAnalysisResult | null;
   metrics: MetricsSnapshot | null;
+  payments: PaymentRecord[];
   error: string | null;
 }
 
@@ -101,6 +116,7 @@ export function initialAnalysisState(): AnalysisState {
     teams,
     fullResult: null,
     metrics: null,
+    payments: [],
     error: null,
   };
 }

@@ -5,6 +5,7 @@ import { Flame, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
 import { HERO_NAV_EXIT_DURATION_MS } from "@/lib/transition-constants";
+import { WalletButton } from "@/components/wallet/wallet-button";
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 interface HeroNavProps {
@@ -42,14 +43,17 @@ export function HeroNav({ className, isExiting, onNavigate }: HeroNavProps) {
         </span>
       </div>
 
-      {/* Right: CTA */}
-      <button
-        onClick={onNavigate}
-        className="flex items-center gap-1.5 font-mono text-[11px] tracking-[0.15em] uppercase text-foreground/80 transition-colors hover:text-foreground"
-      >
-        Open Dashboard
-        <ChevronRight className="size-3.5" />
-      </button>
+      {/* Right: Wallet + CTA */}
+      <div className="flex items-center gap-3">
+        <WalletButton />
+        <button
+          onClick={onNavigate}
+          className="flex items-center gap-1.5 font-mono text-[11px] tracking-[0.15em] uppercase text-foreground/80 transition-colors hover:text-foreground"
+        >
+          Open Dashboard
+          <ChevronRight className="size-3.5" />
+        </button>
+      </div>
     </motion.nav>
   );
 }
