@@ -5,13 +5,13 @@ import { ScriptedAgent } from "./scripted-agent";
 import type { AgentScenario } from "@/lib/agent-paths";
 
 // ---------------------------------------------------------------------------
-// Props
+// Props — activePath / active are refs so the memo'd Canvas never re-renders
 // ---------------------------------------------------------------------------
 
 interface AgentSquadProps {
   scenario: AgentScenario;
-  activePath: "primary" | "alternate";
-  active: boolean;
+  activePathRef: React.RefObject<"primary" | "alternate">;
+  activeRef: React.RefObject<boolean>;
   onAlert?: (agentId: string, text: string, position: [number, number, number]) => void;
   onAllComplete?: () => void;
 }
@@ -22,8 +22,8 @@ interface AgentSquadProps {
 
 export function AgentSquad({
   scenario,
-  activePath,
-  active,
+  activePathRef,
+  activeRef,
   onAlert,
   onAllComplete,
 }: AgentSquadProps) {
@@ -33,7 +33,7 @@ export function AgentSquad({
     (agentId: string) => {
       completedSet.current.add(agentId);
 
-      // Check if every agent with waypoints has completed
+      const activePath = activePathRef.current;
       const agentsWithPaths = scenario.agents.filter(
         (a) => a.paths[activePath].length > 0,
       );
@@ -44,7 +44,7 @@ export function AgentSquad({
         onAllComplete?.();
       }
     },
-    [scenario, activePath, onAllComplete],
+    [scenario, activePathRef, onAllComplete],
   );
 
   return (
@@ -53,8 +53,8 @@ export function AgentSquad({
         <ScriptedAgent
           key={agent.id}
           config={agent}
-          activePath={activePath}
-          active={active}
+          activePathRef={activePathRef}
+          activeRef={activeRef}
           onAlert={onAlert}
           onComplete={handleComplete}
         />

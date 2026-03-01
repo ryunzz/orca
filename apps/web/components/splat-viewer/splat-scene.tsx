@@ -247,7 +247,7 @@ export function SplatScene({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [alternateWorldId, onTransitionStart, onTransitionEnd]);
+  }, [alternateWorldId, onTransitionStart, onTransitionEnd, onSlotChange]);
 
   return (
     <>

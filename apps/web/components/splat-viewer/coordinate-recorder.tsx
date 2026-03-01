@@ -14,8 +14,6 @@ export function CoordinateRecorder() {
   const camera = useThree((s) => s.camera);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "development") return;
-
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "r" && e.key !== "R") return;
       // Avoid capturing when user is typing in an input

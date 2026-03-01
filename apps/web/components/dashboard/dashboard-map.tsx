@@ -465,7 +465,6 @@ export function DashboardMap() {
   const [statusText, setStatusText] = useState("");
   const highlightedIdRef = useRef<string | number | null>(null);
 
-  // Analysis data from backend (auto-starts demo on connect).
   const { analysisState } = useAnalysisContext();
 
   // Markers for completed worlds

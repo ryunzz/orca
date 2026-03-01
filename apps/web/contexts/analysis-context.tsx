@@ -3,12 +3,10 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useMemo,
-  useRef,
   type ReactNode,
 } from "react";
-import { useAnalysis } from "@/hooks/use-analysis";
+import { initialAnalysisState } from "@/lib/api-types";
 import { mapAnalysisToDashboard } from "@/lib/map-analysis-to-dashboard";
 import type { AnalysisState } from "@/lib/api-types";
 import type { IncidentData } from "@/lib/dashboard-constants";
@@ -23,32 +21,18 @@ interface AnalysisContextValue {
 
 const AnalysisContext = createContext<AnalysisContextValue | null>(null);
 
+const noop = () => {};
+
 export function AnalysisProvider({ children }: { children: ReactNode }) {
-  const { state, startAnalysis, startDemo, isConnected } = useAnalysis();
-  const demoStarted = useRef(false);
-
-  // Auto-start demo analysis once connected
-  useEffect(() => {
-    if (isConnected && !demoStarted.current) {
-      demoStarted.current = true;
-      startDemo();
-    }
-  }, [isConnected, startDemo]);
-
-  const incidentData = useMemo(
-    () => mapAnalysisToDashboard(state.fullResult),
-    [state.fullResult]
-  );
-
   const value = useMemo<AnalysisContextValue>(
     () => ({
-      analysisState: state,
-      startAnalysis,
-      startDemo,
-      isConnected,
-      incidentData,
+      analysisState: initialAnalysisState(),
+      startAnalysis: noop,
+      startDemo: noop,
+      isConnected: false,
+      incidentData: mapAnalysisToDashboard(null),
     }),
-    [state, startAnalysis, startDemo, isConnected, incidentData]
+    [],
   );
 
   return (

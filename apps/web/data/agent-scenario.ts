@@ -17,7 +17,15 @@ export const defaultScenario: AgentScenario = {
       color: "#66d9ff",
       paths: {
         primary: [],
-        alternate: [],
+        alternate: [
+          { coordinates: [-1.0, -0.1493, 0.1050], delay: 0.25, alert: null },
+          { coordinates: [1.7490, -0.3302, 0.8379], delay: 0.25, alert: null },
+          { coordinates: [2.6880, -0.2270, 0.4778], delay: 0.25, alert: null },
+          { coordinates: [4.5835, 0.3242, 0.9589], delay: 0.25, alert: "BARRED WINDOWS — COLLAPSE RISK" },
+          { coordinates: [6.4370, 0.3697, 1.7754], delay: 0.25, alert: "DEBRIS FIELD — NO ENTRY" },
+          { coordinates: [9.2503, 0.0008, 2.0473], delay: 0.25, alert: null },
+          { coordinates: [11.5, 0.0887, 1.1450], delay: 0.25, alert: "FIRE BEHIND DOOR — EXTREME HEAT" },
+        ],
       },
     },
     {

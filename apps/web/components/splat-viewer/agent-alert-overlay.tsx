@@ -1,154 +1,143 @@
 "use client";
 
-import { useRef } from "react";
-import { useFrame } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
-import * as THREE from "three";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { defaultScenario } from "@/data/agent-scenario";
+import type { AlertPushFn } from "./splat-viewer";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ActiveAlert {
+interface ActiveAlert {
   id: string;
-  agentId: string;
   text: string;
   color: string;
-  position: [number, number, number];
-  createdAt: number; // clock.elapsedTime when spawned
 }
 
 interface AgentAlertOverlayProps {
-  alerts: ActiveAlert[];
-  onDismiss: (id: string) => void;
+  /** Ref that the 3D scene writes to — overlay registers its push function here. */
+  alertPushRef: React.RefObject<AlertPushFn | null>;
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const ALERT_DURATION = 5; // seconds before auto-dismiss
-const POLE_HEIGHT = 0.12; // height of the vertical anchor line
-const FLOOR_Y = -0.35;
-const AGENT_Y_OFFSET = -0.15;
+const ALERT_DURATION_MS = 5000;
 
 // ---------------------------------------------------------------------------
-// Single alert flag — 3D positioned with Html overlay
+// AgentAlertOverlay — self-contained DOM overlay.
+// Registers a push callback on alertPushRef so the 3D scene can fire alerts
+// without any state living in the Canvas parent.
 // ---------------------------------------------------------------------------
 
-function AlertFlag({
-  alert,
-  onDismiss,
-}: {
-  alert: ActiveAlert;
-  onDismiss: (id: string) => void;
-}) {
-  const groupRef = useRef<THREE.Group>(null);
-  const dismissedRef = useRef(false);
-  const mountTimeRef = useRef(-1);
+export function AgentAlertOverlay({ alertPushRef }: AgentAlertOverlayProps) {
+  const [alerts, setAlerts] = useState<ActiveAlert[]>([]);
+  const nextIdRef = useRef(0);
 
-  useFrame(({ clock }) => {
-    if (dismissedRef.current) return;
-    // Capture the clock time on the first frame this flag renders
-    if (mountTimeRef.current < 0) {
-      mountTimeRef.current = clock.elapsedTime;
-    }
-    const age = clock.elapsedTime - mountTimeRef.current;
-    if (age > ALERT_DURATION) {
-      dismissedRef.current = true;
-      onDismiss(alert.id);
-    }
-  });
+  // Register push function — called from inside useFrame via queueMicrotask
+  useEffect(() => {
+    alertPushRef.current = (
+      agentId: string,
+      text: string,
+      _position: [number, number, number],
+    ) => {
+      const agent = defaultScenario.agents.find((a) => a.id === agentId);
+      const color = agent?.color ?? "#66d9ff";
+      const id = `alert-${nextIdRef.current++}`;
+      setAlerts((prev) => [...prev, { id, text, color }]);
+    };
 
-  const baseY = FLOOR_Y + AGENT_Y_OFFSET;
-  const poleTop = baseY + POLE_HEIGHT;
+    return () => {
+      alertPushRef.current = null;
+    };
+  }, [alertPushRef]);
+
+  const dismiss = useCallback((id: string) => {
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  if (alerts.length === 0) return null;
 
   return (
-    <group
-      ref={groupRef}
-      position={[alert.position[0], 0, alert.position[2]]}
+    <div
+      className="pointer-events-none absolute inset-0"
+      style={{ zIndex: 15 }}
     >
-      {/* Vertical anchor line */}
-      <mesh position={[0, baseY + POLE_HEIGHT / 2, 0]}>
-        <cylinderGeometry args={[0.001, 0.001, POLE_HEIGHT, 4]} />
-        <meshBasicMaterial color={alert.color} transparent opacity={0.4} />
-      </mesh>
-
-      {/* Html label at top of pole */}
-      <Html
-        position={[0, poleTop + 0.01, 0]}
-        center
-        distanceFactor={1.5}
-        style={{ pointerEvents: "none" }}
-      >
-        <div
-          style={{
-            background: "oklch(0.16 0.01 45 / 85%)",
-            border: `1px solid ${alert.color}40`,
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            padding: "4px 10px",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            whiteSpace: "nowrap",
-            animation: "alertFadeIn 0.3s ease-out",
-          }}
-        >
-          {/* Agent color dot */}
-          <span
-            style={{
-              width: 5,
-              height: 5,
-              borderRadius: "50%",
-              background: alert.color,
-              boxShadow: `0 0 4px ${alert.color}`,
-              flexShrink: 0,
-            }}
-          />
-          <span
-            style={{
-              fontFamily: "var(--font-geist-mono, monospace)",
-              fontSize: "8px",
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "oklch(0.9 0 0)",
-            }}
-          >
-            {alert.text}
-          </span>
-        </div>
-      </Html>
-    </group>
+      <style>{`
+        @keyframes alertSlideIn {
+          from { opacity: 0; transform: translateX(-12px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
+      {alerts.map((alert, i) => (
+        <AlertCard key={alert.id} alert={alert} index={i} onDismiss={dismiss} />
+      ))}
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// AgentAlertOverlay — renders all active alerts
+// AlertCard — single alert with auto-dismiss timer
 // ---------------------------------------------------------------------------
 
-export function AgentAlertOverlay({
-  alerts,
+function AlertCard({
+  alert,
+  index,
   onDismiss,
-}: AgentAlertOverlayProps) {
-  return (
-    <group>
-      {alerts.map((alert) => (
-        <AlertFlag key={alert.id} alert={alert} onDismiss={onDismiss} />
-      ))}
+}: {
+  alert: ActiveAlert;
+  index: number;
+  onDismiss: (id: string) => void;
+}) {
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-      {/* Inject fade-in animation — Html doesn't inherit R3F styles */}
-      {alerts.length > 0 && (
-        <Html>
-          <style>{`
-            @keyframes alertFadeIn {
-              from { opacity: 0; transform: translateY(4px); }
-              to { opacity: 1; transform: translateY(0); }
-            }
-          `}</style>
-        </Html>
-      )}
-    </group>
+  useEffect(() => {
+    timerRef.current = setTimeout(() => onDismiss(alert.id), ALERT_DURATION_MS);
+    return () => clearTimeout(timerRef.current);
+  }, [alert.id, onDismiss]);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 16 + index * 44,
+        left: 16,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        background: "oklch(0.16 0.01 45 / 85%)",
+        border: `1px solid ${alert.color}40`,
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        padding: "6px 12px",
+        maxWidth: 360,
+        animation: "alertSlideIn 0.3s ease-out",
+      }}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: alert.color,
+          boxShadow: `0 0 5px ${alert.color}`,
+          flexShrink: 0,
+        }}
+      />
+      <span
+        style={{
+          fontFamily: "var(--font-geist-mono, monospace)",
+          fontSize: "9px",
+          fontWeight: 700,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: "oklch(0.9 0 0)",
+          lineHeight: 1.4,
+        }}
+      >
+        {alert.text}
+      </span>
+    </div>
   );
 }

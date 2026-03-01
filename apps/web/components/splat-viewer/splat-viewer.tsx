@@ -1,15 +1,135 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  memo,
+} from "react";
 import { Canvas } from "@react-three/fiber";
 import { Loader2 } from "lucide-react";
 import { SplatScene } from "./splat-scene";
 import { AgentSquad } from "./agent-squad";
-import { AgentAlertOverlay, type ActiveAlert } from "./agent-alert-overlay";
+import { AgentAlertOverlay } from "./agent-alert-overlay";
 import { CoordinateRecorder } from "./coordinate-recorder";
 import { SceneMetricsOverlay } from "./scene-metrics-overlay";
 import { defaultScenario } from "@/data/agent-scenario";
 import type { MetricsSnapshot } from "@/lib/api-types";
+
+// ---------------------------------------------------------------------------
+// Alert callback ref — allows the 3D scene to push alerts into the DOM
+// overlay without triggering any React state change in the Canvas parent.
+// ---------------------------------------------------------------------------
+
+export type AlertPushFn = (
+  agentId: string,
+  text: string,
+  position: [number, number, number],
+) => void;
+
+// ---------------------------------------------------------------------------
+// Stable Canvas shell — memoized so parent state changes never re-render it.
+// All communication with the outer DOM goes through refs / stable callbacks.
+// ---------------------------------------------------------------------------
+
+interface CanvasShellProps {
+  spzUrl: string;
+  alternateWorldId?: string;
+  sceneReady: boolean;
+  onLoaded: () => void;
+  onError: (err: Error) => void;
+  onTransitionStart: () => void;
+  onTransitionEnd: () => void;
+  onSlotChange: (slot: "primary" | "alternate") => void;
+  alertPushRef: React.RefObject<AlertPushFn | null>;
+  activeSlotRef: React.RefObject<"primary" | "alternate">;
+  agentActiveRef: React.RefObject<boolean>;
+}
+
+const CanvasShell = memo(function CanvasShell({
+  spzUrl,
+  alternateWorldId,
+  sceneReady,
+  onLoaded,
+  onError,
+  onTransitionStart,
+  onTransitionEnd,
+  onSlotChange,
+  alertPushRef,
+  activeSlotRef,
+  agentActiveRef,
+}: CanvasShellProps) {
+  // Bridge: read refs from the outer component via a thin R3F wrapper
+  return (
+    <Canvas
+      gl={GL_PROPS}
+      camera={CAMERA_PROPS}
+    >
+      <Suspense fallback={null}>
+        <SplatScene
+          spzUrl={spzUrl}
+          alternateWorldId={alternateWorldId}
+          onLoaded={onLoaded}
+          onError={onError}
+          onTransitionStart={onTransitionStart}
+          onTransitionEnd={onTransitionEnd}
+          onSlotChange={onSlotChange}
+        />
+        {sceneReady && (
+          <AgentSquadBridge
+            alertPushRef={alertPushRef}
+            activeSlotRef={activeSlotRef}
+            agentActiveRef={agentActiveRef}
+          />
+        )}
+        {sceneReady && process.env.NODE_ENV === "development" && <CoordinateRecorder />}
+      </Suspense>
+    </Canvas>
+  );
+});
+
+// Stable object refs so Canvas never sees new prop references
+const GL_PROPS = { antialias: false, alpha: true } as const;
+const CAMERA_PROPS = { position: [0, 0, -2] as const, fov: 60, near: 0.1, far: 100 };
+
+// ---------------------------------------------------------------------------
+// AgentSquadBridge — lives inside Canvas, reads refs each frame so it never
+// needs React state or re-renders to pick up changes from the outer DOM.
+// ---------------------------------------------------------------------------
+
+function AgentSquadBridge({
+  alertPushRef,
+  activeSlotRef,
+  agentActiveRef,
+}: {
+  alertPushRef: React.RefObject<AlertPushFn | null>;
+  activeSlotRef: React.RefObject<"primary" | "alternate">;
+  agentActiveRef: React.RefObject<boolean>;
+}) {
+  // Stable callback that forwards to the ref — never changes identity
+  const handleAlert = useCallback(
+    (agentId: string, text: string, position: [number, number, number]) => {
+      alertPushRef.current?.(agentId, text, position);
+    },
+    [alertPushRef],
+  );
+
+  return (
+    <AgentSquad
+      scenario={defaultScenario}
+      activePathRef={activeSlotRef}
+      activeRef={agentActiveRef}
+      onAlert={handleAlert}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SplatViewer — outer component that owns DOM overlays + state.
+// The Canvas is fully isolated inside CanvasShell (memo'd).
+// ---------------------------------------------------------------------------
 
 interface SplatViewerProps {
   spzUrl: string;
@@ -26,75 +146,46 @@ export function SplatViewer({
   const [error, setError] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
 
-  // Agent starts inactive — activates on first click in the scene.
-  // Press N to toggle off after that.
   const [agentActive, setAgentActive] = useState(false);
   const [hasClicked, setHasClicked] = useState(false);
 
-  // Which splat world is active (mirrored from SplatScene)
-  const [activeSlot, setActiveSlot] = useState<"primary" | "alternate">("primary");
+  // --- Refs that the Canvas reads without triggering re-renders -----------
+  const activeSlotRef = useRef<"primary" | "alternate">("primary");
+  const agentActiveRef = useRef(false);
 
-  // Room proximity state
-  const [currentRoom, setCurrentRoom] = useState<string | null>(null);
-  const [roomsVisited, setRoomsVisited] = useState<Set<string>>(new Set());
-
-  // Alert state
-  const [activeAlerts, setActiveAlerts] = useState<ActiveAlert[]>([]);
-  const alertIdCounter = useRef(0);
-
+  // --- Stable callbacks (identity never changes) --------------------------
   const handleLoaded = useCallback(() => setLoading(false), []);
   const handleError = useCallback((err: Error) => {
     setError(err.message);
     setLoading(false);
   }, []);
-
-  const handleRoomReached = useCallback((room: string) => {
-    setCurrentRoom(room);
-    setRoomsVisited((prev) => {
-      if (prev.has(room)) return prev;
-      const next = new Set(prev);
-      next.add(room);
-      return next;
-    });
-  }, []);
-
+  const handleTransitionStart = useCallback(() => setTransitioning(true), []);
+  const handleTransitionEnd = useCallback(() => setTransitioning(false), []);
   const handleSlotChange = useCallback((slot: "primary" | "alternate") => {
-    setActiveSlot(slot);
+    activeSlotRef.current = slot;
   }, []);
 
-  const handleAlert = useCallback(
-    (agentId: string, text: string, position: [number, number, number]) => {
-      const agent = defaultScenario.agents.find((a) => a.id === agentId);
-      const color = agent?.color ?? "#66d9ff";
-      const id = `alert-${alertIdCounter.current++}`;
-      setActiveAlerts((prev) => [
-        ...prev,
-        { id, agentId, text, color, position, createdAt: 0 },
-      ]);
-      // createdAt is set to 0 here — the AlertFlag component uses clock.elapsedTime
-      // on its first frame to calibrate. We pass 0 as a sentinel; the component
-      // handles it by snapping createdAt on mount.
-    },
-    [],
-  );
+  // --- Alert channel: 3D scene writes here, DOM overlay reads it ----------
+  // The alert overlay manages its own state — SplatViewer never re-renders.
+  const alertPushRef = useRef<AlertPushFn | null>(null);
 
-  const handleAlertDismiss = useCallback((id: string) => {
-    setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
-  }, []);
-
-  // First click activates the agent
+  // First click activates agents
   const handleCanvasClick = useCallback(() => {
     if (!hasClicked) {
       setHasClicked(true);
+      agentActiveRef.current = true;
       setAgentActive(true);
     }
   }, [hasClicked]);
 
-  // N key toggles agent following (only after first click)
+  // N key toggles agents
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.key === "n" || e.key === "N") && hasClicked) {
-        setAgentActive((prev) => !prev);
+        setAgentActive((prev) => {
+          agentActiveRef.current = !prev;
+          return !prev;
+        });
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -103,61 +194,32 @@ export function SplatViewer({
 
   const sceneReady = !loading && !error;
 
-  // Progress based on rooms visited from the optimal path
-  const pathRooms = metrics?.optimized_path.path ?? [];
-  const visitedOnPath = pathRooms.filter((r) => roomsVisited.has(r)).length;
-  const progress =
-    pathRooms.length > 0 ? Math.round((visitedOnPath / pathRooms.length) * 100) : 0;
-
   return (
     <div className="relative h-full w-full" onClick={handleCanvasClick}>
-      <Canvas
-        gl={{ antialias: false, alpha: true }}
-        camera={{ position: [0, 0, -2], fov: 60, near: 0.1, far: 100 }}
-      >
-        <Suspense fallback={null}>
-          <SplatScene
-            spzUrl={spzUrl}
-            alternateWorldId={alternateWorldId}
-            onLoaded={handleLoaded}
-            onError={handleError}
-            onTransitionStart={() => setTransitioning(true)}
-            onTransitionEnd={() => setTransitioning(false)}
-            onSlotChange={handleSlotChange}
-          />
-        </Suspense>
+      <CanvasShell
+        spzUrl={spzUrl}
+        alternateWorldId={alternateWorldId}
+        sceneReady={sceneReady}
+        onLoaded={handleLoaded}
+        onError={handleError}
+        onTransitionStart={handleTransitionStart}
+        onTransitionEnd={handleTransitionEnd}
+        onSlotChange={handleSlotChange}
+        alertPushRef={alertPushRef}
+        activeSlotRef={activeSlotRef}
+        agentActiveRef={agentActiveRef}
+      />
 
-        {/* Multi-agent squad — waypoint-driven */}
-        {sceneReady && (
-          <AgentSquad
-            scenario={defaultScenario}
-            activePath={activeSlot}
-            active={agentActive}
-            onAlert={handleAlert}
-          />
-        )}
+      {/* Alert overlay — manages its own state, decoupled from Canvas */}
+      {sceneReady && <AgentAlertOverlay alertPushRef={alertPushRef} />}
 
-        {/* 3D alert flags */}
-        {sceneReady && (
-          <AgentAlertOverlay
-            alerts={activeAlerts}
-            onDismiss={handleAlertDismiss}
-          />
-        )}
-
-        {/* Dev coordinate recorder — R key logs waypoint JSON */}
-        {sceneReady && process.env.NODE_ENV === "development" && (
-          <CoordinateRecorder />
-        )}
-      </Canvas>
-
-      {/* Metrics overlay — only when analysis data is available */}
+      {/* Metrics overlay */}
       {sceneReady && metrics && (
         <SceneMetricsOverlay
           metrics={metrics}
-          currentRoom={currentRoom}
-          progress={progress}
-          complete={progress >= 100}
+          currentRoom={null}
+          progress={0}
+          complete={false}
         />
       )}
 
