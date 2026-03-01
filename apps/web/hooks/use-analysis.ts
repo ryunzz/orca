@@ -35,6 +35,20 @@ export function useAnalysis() {
     try {
       const msg = JSON.parse(ev.data as string);
 
+      // Agent micropayment event — must be checked before the generic msg.team guard
+      if (msg.event === "payment" && msg.team) {
+        const payment: PaymentRecord = {
+          team: msg.team as TeamType,
+          recipient: msg.recipient as string,
+          amount_lamports: msg.amount_lamports as number,
+          tx_signature: msg.tx_signature as string,
+          status: (msg.status as PaymentRecord["status"]) ?? "submitted",
+          timestamp: Date.now(),
+        };
+        setState((prev) => ({ ...prev, payments: [...prev.payments, payment] }));
+        return;
+      }
+
       // Per-team status update
       if (msg.team) {
         const team = msg.team as TeamType;
@@ -48,20 +62,6 @@ export function useAnalysis() {
             },
           },
         }));
-        return;
-      }
-
-      // Agent micropayment event
-      if (msg.event === "payment" && msg.team) {
-        const payment: PaymentRecord = {
-          team: msg.team as TeamType,
-          recipient: msg.recipient as string,
-          amount_lamports: msg.amount_lamports as number,
-          tx_signature: msg.tx_signature as string,
-          status: (msg.status as PaymentRecord["status"]) ?? "submitted",
-          timestamp: Date.now(),
-        };
-        setState((prev) => ({ ...prev, payments: [...prev.payments, payment] }));
         return;
       }
 
