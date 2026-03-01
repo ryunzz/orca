@@ -23,8 +23,10 @@ export function SplatViewer({
   const [error, setError] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
 
-  // Agent follows camera by default. Press N to toggle off.
-  const [agentActive, setAgentActive] = useState(true);
+  // Agent starts inactive — activates on first click in the scene.
+  // Press N to toggle off after that.
+  const [agentActive, setAgentActive] = useState(false);
+  const [hasClicked, setHasClicked] = useState(false);
 
   // Room proximity state
   const [currentRoom, setCurrentRoom] = useState<string | null>(null);
@@ -46,16 +48,24 @@ export function SplatViewer({
     });
   }, []);
 
-  // N key toggles agent following
+  // First click activates the agent
+  const handleCanvasClick = useCallback(() => {
+    if (!hasClicked) {
+      setHasClicked(true);
+      setAgentActive(true);
+    }
+  }, [hasClicked]);
+
+  // N key toggles agent following (only after first click)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "n" || e.key === "N") {
+      if ((e.key === "n" || e.key === "N") && hasClicked) {
         setAgentActive((prev) => !prev);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [hasClicked]);
 
   const sceneReady = !loading && !error;
 
@@ -66,7 +76,7 @@ export function SplatViewer({
     pathRooms.length > 0 ? Math.round((visitedOnPath / pathRooms.length) * 100) : 0;
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full" onClick={handleCanvasClick}>
       <Canvas
         gl={{ antialias: false, alpha: true }}
         camera={{ position: [0, 0, -2], fov: 60, near: 0.1, far: 100 }}
@@ -115,12 +125,20 @@ export function SplatViewer({
               flexShrink: 0,
             }}
           />
-          <kbd className="rounded border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
-            N
-          </kbd>
-          <span className="text-[10px] uppercase tracking-[0.1em] text-white/50">
-            {agentActive ? "Agent on" : "Agent off"}
-          </span>
+          {hasClicked ? (
+            <>
+              <kbd className="rounded border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
+                N
+              </kbd>
+              <span className="text-[10px] uppercase tracking-[0.1em] text-white/50">
+                {agentActive ? "Agent on" : "Agent off"}
+              </span>
+            </>
+          ) : (
+            <span className="text-[10px] uppercase tracking-[0.1em] text-white/50">
+              Click to start agent
+            </span>
+          )}
         </div>
       )}
 
