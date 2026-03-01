@@ -13,6 +13,7 @@
     "@base-ui/react": "^1.2.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "@solana/web3.js": "^1.98.4",
     "@sparkjsdev/spark": "^0.1.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

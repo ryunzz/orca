@@ -54,6 +54,7 @@ import {
 } from "./building-prompt-dialog";
 import { MapSearch } from "./map-search";
 import { MetricsPanel } from "./metrics-panel";
+import { PaymentsPanel } from "./payments-panel";
 
 // ---------------------------------------------------------------------------
 // Token
@@ -998,6 +999,7 @@ export function DashboardMap() {
       {mapReady && mapRef.current && <MapSearch map={mapRef.current} />}
 
       <MetricsPanel metrics={analysisState.metrics} />
+      <PaymentsPanel payments={analysisState.payments} />
 
       <AnimatePresence>
         {selectedBuilding && (

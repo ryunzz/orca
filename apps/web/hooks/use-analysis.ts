@@ -5,6 +5,7 @@ import { WS_BASE } from "@/lib/api-config";
 import {
   type AnalysisState,
   type TeamType,
+  type PaymentRecord,
   TEAM_ORDER,
   initialAnalysisState,
 } from "@/lib/api-types";
@@ -25,7 +26,7 @@ export function useAnalysis() {
       for (const t of TEAM_ORDER) {
         teams[t] = { status: "pending", result: null };
       }
-      return { ...prev, teams, fullResult: null, metrics: null, error: null, analyzing: false };
+      return { ...prev, teams, fullResult: null, metrics: null, payments: [], error: null, analyzing: false };
     });
   }, []);
 
@@ -47,6 +48,20 @@ export function useAnalysis() {
             },
           },
         }));
+        return;
+      }
+
+      // Agent micropayment event
+      if (msg.event === "payment" && msg.team) {
+        const payment: PaymentRecord = {
+          team: msg.team as TeamType,
+          recipient: msg.recipient as string,
+          amount_lamports: msg.amount_lamports as number,
+          tx_signature: msg.tx_signature as string,
+          status: (msg.status as PaymentRecord["status"]) ?? "submitted",
+          timestamp: Date.now(),
+        };
+        setState((prev) => ({ ...prev, payments: [...prev.payments, payment] }));
         return;
       }
 
